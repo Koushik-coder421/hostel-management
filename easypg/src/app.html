@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en" data-astryx-theme="neutral">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <link rel="icon" href="%sveltekit.assets%/favicon.png" />
+    <title>EasyPG — Hostel Management</title>
+    <script>
+      try {
+        const preference = localStorage.getItem('easypg-native-appearance');
+        const dark =
+          preference === 'dark' ||
+          (!preference && matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      } catch {}
+    </script>
+    %sveltekit.head%
+  </head>
+  <body data-sveltekit-preload-data="hover">
+    <div style="display: contents">%sveltekit.body%</div>
+  </body>
+</html>

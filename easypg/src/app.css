@@ -1,0 +1,64 @@
+@import '@astryx-svelte/core/base.css';
+@import '@astryx-svelte/core/astryx.css';
+@import '@astryx-svelte/theme-neutral/theme.css';
+@font-face {
+  font-family: 'Figtree';
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url('@fontsource-variable/figtree/files/figtree-latin-wght-normal.woff2') format('woff2');
+}
+
+/* All component and application layouts are authored in StyleX. This layer only
+   sets document defaults and native-browser accessibility behavior. */
+@layer product {
+  [hidden]:not([hidden='until-found']) {
+    display: none !important;
+  }
+  :root,
+  [data-astryx-theme='neutral'] {
+    --size-element-md: 44px;
+    --size-element-lg: 48px;
+  }
+  @media (max-width: 767px) {
+    :root,
+    [data-astryx-theme='neutral'] {
+      --size-element-sm: 44px;
+    }
+  }
+  html,
+  body {
+    margin: 0;
+    min-height: 100%;
+  }
+  body {
+    font-family: var(--font-family-body, 'Figtree Variable', sans-serif);
+    color: var(--color-text-primary);
+    background: var(--color-background-body);
+    -webkit-font-smoothing: antialiased;
+  }
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 3px;
+  }
+  ::selection {
+    background: var(--color-background-blue);
+    color: var(--color-text-blue);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

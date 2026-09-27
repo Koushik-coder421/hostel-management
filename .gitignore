@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# SvelteKit / Vite
+.svelte-kit/
+build/
+dist/
+
+# Logs
+*.log
+
+# Test coverage
+coverage/
+
+# OS files
+.DS_Store
+Thumbs.db

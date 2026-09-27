@@ -1,0 +1,55 @@
+{
+  "name": "easypg-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "prepare": "svelte-kit sync",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "test:unit": "vitest run",
+    "test:e2e": "playwright test",
+    "verify:boundary": "node scripts/verify-boundary.mjs",
+    "test": "pnpm verify:boundary && pnpm check && pnpm test:unit && pnpm build && pnpm test:e2e",
+    "contract:generate": "node scripts/generate-contract.mjs && tsx scripts/generate-openapi.ts"
+  },
+  "devDependencies": {
+    "@astryx-svelte/cli": "0.5.2",
+    "@axe-core/playwright": "^4.13.0",
+    "@fontsource-variable/figtree": "^5.3.0",
+    "@lucide/svelte": "^1.39.0",
+    "@playwright/test": "^1.60.0",
+    "@stylexjs/unplugin": "0.19.0",
+    "@sveltejs/adapter-static": "^3.0.10",
+    "@sveltejs/kit": "^2.63.0",
+    "@sveltejs/vite-plugin-svelte": "^7.1.2",
+    "@types/node": "^26.6.2",
+    "playwright": "^1.60.0",
+    "prettier": "^3.9.8",
+    "prettier-plugin-svelte": "^4.1.1",
+    "svelte": "^5.56.1",
+    "svelte-check": "^4.6.0",
+    "ts-json-schema-generator": "^2.9.0",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.16",
+    "vitest": "^4.1.8"
+  },
+  "dependencies": {
+    "@astryx-svelte/core": "0.5.2",
+    "@astryx-svelte/theme-neutral": "0.5.2",
+    "@stylexjs/stylex": "0.19.0",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "zod": "^4.5.4"
+  },
+  "astryx": {
+    "theme": "@astryx-svelte/theme-neutral"
+  },
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}
