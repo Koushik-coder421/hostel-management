@@ -18,12 +18,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v3
         with:
-          version: 8
+          version: 11.25.0
 
       - name: Install Backend Dependencies
         run: |
@@ -41,10 +41,9 @@ jobs:
           npm run build
 
       - name: Install Frontend Dependencies
-        run: |
-          cd easypg
-          pnpm install --no-frozen-lockfile
-
+        working-directory: easypg
+        run: pnpm install --frozen-lockfile
+        
       - name: Verify Frontend Svelte Diagnostics
         run: |
           cd easypg
