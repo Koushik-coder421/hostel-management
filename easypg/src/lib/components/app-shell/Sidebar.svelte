@@ -20,8 +20,12 @@
   } = $props();
   const roleLabels: Record<string, string> = {
     platform_admin: 'Platform Admin',
-    organization_admin: 'Owner / Org Admin',
-    manager: 'Manager',
+    organization_admin: 'Organization Admin',
+    org_admin: 'Partner / Org Admin',
+    partner: 'Partner / Org Admin',
+    head: 'Head Admin',
+    manager: 'Property Manager',
+    supervisor: 'Supervisor',
     resident: 'Resident'
   };
 </script>

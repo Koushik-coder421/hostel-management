@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { PageData } from './$types';
   import { enhance } from '$lib/api/forms';
-  import { Badge, Button, Card } from '@astryx-svelte/core';
+  import { Badge, Button, Card, Dialog, TextInput } from '@astryx-svelte/core';
+  import { invalidateAll } from '$app/navigation';
   import { sx } from '$lib/design/attrs';
   import { styles } from './page.stylex';
   import Home from '@lucide/svelte/icons/home';
@@ -14,6 +15,33 @@
 
   let { data }: { data: PageData } = $props();
   let searchQuery = $state('');
+
+  // Edit Hostel State
+  let isEditDialogOpen = $state(false);
+  let editingHostel = $state<any>(null);
+  let editHostelName = $state('');
+  let editHostelCode = $state('');
+
+  function openEditHostel(hostel: any) {
+    editingHostel = hostel;
+    editHostelName = hostel.name;
+    editHostelCode = hostel.code;
+    isEditDialogOpen = true;
+  }
+
+  async function handleSaveHostel(e: Event) {
+    e.preventDefault();
+    if (!editingHostel) return;
+    editingHostel.name = editHostelName;
+    editingHostel.code = editHostelCode;
+    isEditDialogOpen = false;
+    await invalidateAll();
+  }
+
+  async function toggleHostelStatus(hostel: any) {
+    hostel.status = hostel.status === 'inactive' ? 'active' : 'inactive';
+    await invalidateAll();
+  }
   let filteredHostels = $derived(
     data.hostels.filter((hostel) => {
       if (!searchQuery.trim()) return true;
@@ -161,6 +189,18 @@
                 size="sm"
                 xstyle={styles.fullButton}>{#snippet icon()}<Users size={15} />{/snippet}</Button
               >
+              <Button
+                label="Edit"
+                variant="ghost"
+                size="sm"
+                onclick={() => openEditHostel(hostel)}
+              />
+              <Button
+                label={hostel.status === 'inactive' ? 'Activate' : 'Deactivate'}
+                variant="ghost"
+                size="sm"
+                onclick={() => toggleHostelStatus(hostel)}
+              />
             </div>
           </div>
         </Card>
@@ -168,3 +208,49 @@
     </div>
   {/if}
 </div>
+
+<Dialog
+  isOpen={isEditDialogOpen}
+  onOpenChange={(open) => (isEditDialogOpen = open)}
+  width={460}
+  purpose="form"
+  aria-label="Edit Hostel Details"
+>
+  <div style="padding: 1.5rem; background: var(--color-background-card, #1e293b); color: var(--color-text-primary, inherit); border-radius: 8px;">
+    <h2 style="font-size: 1.2rem; margin-top: 0; margin-bottom: 0.5rem;">Edit Hostel Details</h2>
+    <p style="font-size: 0.85rem; color: var(--color-text-secondary, #9ca3af); margin-bottom: 1.2rem;">
+      Update hostel branch name and code.
+    </p>
+    <form onsubmit={handleSaveHostel} style="display: flex; flex-direction: column; gap: 1rem;">
+      <TextInput
+        label="Hostel Name"
+        htmlName="editHostelName"
+        value={editHostelName}
+        onChange={(value) => (editHostelName = value)}
+        isRequired
+      />
+      <TextInput
+        label="Hostel Code"
+        htmlName="editHostelCode"
+        value={editHostelCode}
+        onChange={(value) => (editHostelCode = value)}
+        isRequired
+      />
+      <div style="display: flex; justify-content: flex-end; gap: 0.8rem; margin-top: 1rem;">
+        <Button
+          label="Cancel"
+          type="button"
+          variant="secondary"
+          onclick={() => (isEditDialogOpen = false)}
+        />
+        <Button
+          label="Save Changes"
+          type="submit"
+          variant="primary"
+        >
+          {#snippet icon()}<CheckCircle2 size={15} />{/snippet}
+        </Button>
+      </div>
+    </form>
+  </div>
+</Dialog>

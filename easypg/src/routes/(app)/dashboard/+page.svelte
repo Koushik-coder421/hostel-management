@@ -233,7 +233,16 @@
         {/each}
       </div>
     </section>
-  {:else if (role === 'organization_admin' || role === 'PARTNER') && orgData}
+  {:else if ((role as string) === 'organization_admin' || (role as string) === 'org_admin' || (role as string) === 'ORG_ADMIN' || (role as string) === 'partner' || role === 'PARTNER') && orgData}
+    <div style="background: var(--color-background-card, #1e293b); border: 1px solid var(--color-border, #334155); border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+      <div>
+        <Text type="label" color="accent" weight="semibold" display="block">Assigned Role & Organization Scope</Text>
+        <Text type="body" weight="semibold" display="block">Role: Partner / Organization Admin</Text>
+        <Text type="supporting" color="secondary" display="block">Organization: {orgData.organizationName} • {orgData.hostelCount} Suitable Hostels Assigned</Text>
+      </div>
+      <Badge label="Organization Admin" variant="info" />
+    </div>
+
     <header {...sx(styles.pageHeader)}>
       <div {...sx(styles.headerCopy)}>
         <Text type="label" color="accent" weight="semibold" display="block"
@@ -384,6 +393,15 @@
       </div>
     </section>
   {:else if managerData}
+    <div style="background: var(--color-background-card, #1e293b); border: 1px solid var(--color-border, #334155); border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+      <div>
+        <Text type="label" color="accent" weight="semibold" display="block">Assigned Role & Property Scope</Text>
+        <Text type="body" weight="semibold" display="block">Role: {(role as string) === 'supervisor' || role === 'SUPERVISOR' ? 'Supervisor' : 'Property Manager'}</Text>
+        <Text type="supporting" color="secondary" display="block">Assigned Property: {managerData.hostelName} (Suitable for operational management)</Text>
+      </div>
+      <Badge label={(role as string) === 'supervisor' || role === 'SUPERVISOR' ? 'Supervisor' : 'Property Manager'} variant="success" />
+    </div>
+
     <header {...sx(styles.pageHeader)}>
       <div {...sx(styles.headerCopy)}>
         <Text type="label" color="accent" weight="semibold" display="block">Daily overview</Text>

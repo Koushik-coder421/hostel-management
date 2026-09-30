@@ -1,0 +1,32 @@
+[project]
+name = "hostel-management"
+root = "."
+languages = ["python", "typescript", "javascript"]
+
+[boundaries]
+# Enforce frontend architectural boundaries
+[[boundaries.rule]]
+name = "UI components should not directly import internal API form handlers"
+source = "easypg/src/lib/components/**"
+forbidden = ["easypg/src/lib/api/forms.ts"]
+severity = "warning"
+
+# Enforce backend architectural boundaries
+[[boundaries.rule]]
+name = "Domain logic cannot import route adapters"
+source = "backend/domain/**"
+forbidden = ["backend/api/**", "backend/routes/**"]
+severity = "error"
+
+[ignore]
+paths = [
+  "node_modules/**",
+  ".svelte-kit/**",
+  "build/**",
+  "dist/**",
+  "easypg/node_modules/**",
+  "easypg/.svelte-kit/**",
+  "easypg/build/**",
+  "easypg/tests/**",
+  ".scopemap-cache/**"
+]

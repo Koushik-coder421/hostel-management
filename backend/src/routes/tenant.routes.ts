@@ -15,14 +15,14 @@ const router = Router();
 
 router.use(authenticateToken);
 
-router.get("/", authorizeRoles("ADMIN", "SUPERVISOR"), getAllTenants);
-router.get("/:id", authorizeRoles("ADMIN", "SUPERVISOR"), getTenantById);
-router.post("/", authorizeRoles("ADMIN", "SUPERVISOR"), createTenant);
-router.put("/:id", authorizeRoles("ADMIN", "SUPERVISOR"), updateTenant);
-router.delete("/:id", authorizeRoles("ADMIN"), deleteTenant);
+router.get("/", authorizeRoles("SUPERADMIN", "HEAD", "PARTNER", "MANAGER", "ADMIN", "SUPERVISOR"), getAllTenants);
+router.get("/:id", authorizeRoles("SUPERADMIN", "HEAD", "PARTNER", "MANAGER", "ADMIN", "SUPERVISOR"), getTenantById);
+router.post("/", authorizeRoles("SUPERADMIN", "HEAD", "PARTNER", "MANAGER", "ADMIN", "SUPERVISOR"), createTenant);
+router.put("/:id", authorizeRoles("SUPERADMIN", "HEAD", "PARTNER", "MANAGER", "ADMIN", "SUPERVISOR"), updateTenant);
+router.delete("/:id", authorizeRoles("SUPERADMIN", "ADMIN"), deleteTenant);
 
-router.post("/:id/documents", authorizeRoles("ADMIN", "SUPERVISOR"), addTenantDocument);
-router.post("/:id/emergency-contacts", authorizeRoles("ADMIN", "SUPERVISOR"), addEmergencyContact);
-router.post("/:id/preferences", authorizeRoles("ADMIN", "SUPERVISOR"), addTenantPreference);
+router.post("/:id/documents", authorizeRoles("SUPERADMIN", "HEAD", "PARTNER", "MANAGER", "ADMIN", "SUPERVISOR"), addTenantDocument);
+router.post("/:id/emergency-contacts", authorizeRoles("SUPERADMIN", "HEAD", "PARTNER", "MANAGER", "ADMIN", "SUPERVISOR"), addEmergencyContact);
+router.post("/:id/preferences", authorizeRoles("SUPERADMIN", "HEAD", "PARTNER", "MANAGER", "ADMIN", "SUPERVISOR"), addTenantPreference);
 
 export default router;

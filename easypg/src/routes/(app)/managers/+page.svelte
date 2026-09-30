@@ -1,19 +1,43 @@
 <script lang="ts">
   import { enhance, feedback } from '$lib/api/forms';
   import type { PageData } from './$types';
-  import { Badge, Button, Card, Table, pixel, proportional } from '@astryx-svelte/core';
+  import { Badge, Button, Card, Dialog, Table, TextInput, pixel, proportional } from '@astryx-svelte/core';
+  import { invalidateAll } from '$app/navigation';
   import { sx } from '$lib/design/attrs';
   import { tableLayout } from '$lib/design/table.stylex';
   import { styles } from './page.stylex';
   import Shield from '@lucide/svelte/icons/shield';
   import Home from '@lucide/svelte/icons/home';
   import AlertCircle from '@lucide/svelte/icons/alert-circle';
+  import CheckCircle2 from '@lucide/svelte/icons/check-circle-2';
 
   type Manager = PageData['managers'][number] & Record<string, unknown>;
   let { data }: { data: PageData } = $props();
   let form = $derived($feedback);
   let statusPending = $state<Record<string, boolean>>({});
   let statusErrors = $state<Record<string, string>>({});
+
+  // Edit Staff State
+  let isEditDialogOpen = $state(false);
+  let editingManager = $state<Manager | null>(null);
+  let editManagerName = $state('');
+  let editManagerRole = $state('');
+
+  function openEditManager(item: Manager) {
+    editingManager = item;
+    editManagerName = String(item.name || '');
+    editManagerRole = String(item.roleLabel || item.role || 'manager');
+    isEditDialogOpen = true;
+  }
+
+  async function handleSaveManager(e: Event) {
+    e.preventDefault();
+    if (!editingManager) return;
+    (editingManager as any).name = editManagerName;
+    (editingManager as any).roleLabel = editManagerRole;
+    isEditDialogOpen = false;
+    await invalidateAll();
+  }
 
   function actionError(result: unknown): string {
     if (typeof result === 'object' && result !== null && 'data' in result) {
@@ -71,31 +95,39 @@
       <AlertCircle size={14} /> {statusErrors[bindingId]}
     </span>
   {/if}
-    <form
-      method="POST"
-      data-operation="toggleManager"
-      use:enhance={() => {
-        setStatusPending(bindingId, true);
-        clearStatusError(bindingId);
-        return async ({ result, update }) => {
-          if (result.type === 'failure' || result.type === 'error') {
-            statusErrors = { ...statusErrors, [bindingId]: actionError(result) };
-          }
-          setStatusPending(bindingId, false);
-          await update({ reset: false });
-        };
-      }}
-    >
-    <input type="hidden" name="bindingId" value={item.bindingId} />
-    <input type="hidden" name="isActive" value={item.isActive ? 'true' : 'false'} />
-    <Button
-      label={statusPending[bindingId] ? 'Updating…' : item.isActive ? 'Deactivate' : 'Activate'}
-      variant="ghost"
-      size="sm"
-      type="submit"
-      isDisabled={statusPending[bindingId]}
-    />
-    </form>
+    <div style="display: flex; gap: 0.4rem; align-items: center;">
+      <Button
+        label="Edit"
+        variant="ghost"
+        size="sm"
+        onclick={() => openEditManager(item)}
+      />
+      <form
+        method="POST"
+        data-operation="toggleManager"
+        use:enhance={() => {
+          setStatusPending(bindingId, true);
+          clearStatusError(bindingId);
+          return async ({ result, update }) => {
+            if (result.type === 'failure' || result.type === 'error') {
+              statusErrors = { ...statusErrors, [bindingId]: actionError(result) };
+            }
+            setStatusPending(bindingId, false);
+            await update({ reset: false });
+          };
+        }}
+      >
+        <input type="hidden" name="bindingId" value={item.bindingId} />
+        <input type="hidden" name="isActive" value={item.isActive ? 'true' : 'false'} />
+        <Button
+          label={statusPending[bindingId] ? 'Updating…' : item.isActive ? 'Deactivate' : 'Activate'}
+          variant="ghost"
+          size="sm"
+          type="submit"
+          isDisabled={statusPending[bindingId]}
+        />
+      </form>
+    </div>
   {/if}
 {/snippet}
 {#snippet managerCountIcon()}<Shield size={14} />{/snippet}
@@ -161,3 +193,49 @@
     </div>
   </Card>
 </div>
+
+<Dialog
+  isOpen={isEditDialogOpen}
+  onOpenChange={(open) => (isEditDialogOpen = open)}
+  width={460}
+  purpose="form"
+  aria-label="Edit Staff Profile"
+>
+  <div style="padding: 1.5rem; background: var(--color-background-card, #1e293b); color: var(--color-text-primary, inherit); border-radius: 8px;">
+    <h2 style="font-size: 1.2rem; margin-top: 0; margin-bottom: 0.5rem;">Edit Staff Profile</h2>
+    <p style="font-size: 0.85rem; color: var(--color-text-secondary, #9ca3af); margin-bottom: 1.2rem;">
+      Update staff name and administrative role assignment.
+    </p>
+    <form onsubmit={handleSaveManager} style="display: flex; flex-direction: column; gap: 1rem;">
+      <TextInput
+        label="Staff Name"
+        htmlName="editManagerName"
+        value={editManagerName}
+        onChange={(value) => (editManagerName = value)}
+        isRequired
+      />
+      <TextInput
+        label="Role Designation"
+        htmlName="editManagerRole"
+        value={editManagerRole}
+        onChange={(value) => (editManagerRole = value)}
+        isRequired
+      />
+      <div style="display: flex; justify-content: flex-end; gap: 0.8rem; margin-top: 1rem;">
+        <Button
+          label="Cancel"
+          type="button"
+          variant="secondary"
+          onclick={() => (isEditDialogOpen = false)}
+        />
+        <Button
+          label="Save Changes"
+          type="submit"
+          variant="primary"
+        >
+          {#snippet icon()}<CheckCircle2 size={15} />{/snippet}
+        </Button>
+      </div>
+    </form>
+  </div>
+</Dialog>

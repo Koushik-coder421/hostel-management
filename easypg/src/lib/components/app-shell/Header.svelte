@@ -4,6 +4,7 @@
   import { tick } from 'svelte';
   import { goto } from '$app/navigation';
   import ThemeToggle from './ThemeToggle.svelte';
+  import PointGrabToggle from './PointGrabToggle.svelte';
   import { sx } from '$lib/design/attrs';
   import { shell } from './shell.stylex';
 
@@ -75,6 +76,7 @@
           />
         </div>
       {/if}
+      <PointGrabToggle />
       <ThemeToggle />
       <DropdownMenu
         button={{

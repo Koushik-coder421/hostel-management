@@ -516,6 +516,11 @@
         </h2>
 
         <form onsubmit={handleSubmit}>
+          {#if errorMsg}
+            <div class="alert alert-error" style="margin-bottom: 1rem; color: #dc2626; background: rgba(220, 38, 38, 0.1); padding: 0.75rem; border-radius: 0.375rem; border: 1px solid rgba(220, 38, 38, 0.3);">
+              {errorMsg}
+            </div>
+          {/if}
           {#if activeModal === 'hostel'}
             <div class="form-group">
               <label for="hname">Hostel Name</label>
@@ -763,10 +768,10 @@
   .title {
     font-size: 2rem;
     margin: 0.2rem 0;
-    color: #111827;
+    color: var(--color-text-primary, inherit);
   }
   .description {
-    color: #6b7280;
+    color: var(--color-text-secondary, #9ca3af);
     margin: 0;
   }
   .header-actions {
@@ -791,8 +796,9 @@
     background: #1d4ed8;
   }
   .btn-secondary {
-    background: #e5e7eb;
-    color: #374151;
+    background: var(--color-background-card, #334155);
+    color: var(--color-text-primary, inherit);
+    border: 1px solid var(--color-border, #475569);
   }
   .btn-accent {
     background: #059669;
@@ -805,7 +811,7 @@
   .btn-outline {
     background: transparent;
     border: 1px solid #2563eb;
-    color: #2563eb;
+    color: #60a5fa;
   }
   .alert {
     padding: 1rem;
@@ -813,20 +819,23 @@
     margin-bottom: 1rem;
   }
   .alert-success {
-    background: #d1fae5;
-    color: #065f46;
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.3);
   }
   .alert-error {
-    background: #fee2e2;
-    color: #991b1b;
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
   }
   .role-badge-row {
     margin-bottom: 1rem;
   }
   .role-chip {
     display: inline-block;
-    background: #eff6ff;
-    color: #1e40af;
+    background: rgba(37, 99, 235, 0.15);
+    color: #60a5fa;
+    border: 1px solid rgba(37, 99, 235, 0.3);
     padding: 0.4rem 0.8rem;
     border-radius: 12px;
     font-size: 0.9rem;
@@ -838,41 +847,41 @@
     margin-bottom: 2rem;
   }
   .metric-card {
-    background: white;
-    border: 1px solid #e5e7eb;
+    background: var(--color-background-card, #1e293b);
+    border: 1px solid var(--color-border, #334155);
     border-radius: 8px;
     padding: 1.2rem;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   }
   .metric-label {
     font-size: 0.85rem;
-    color: #6b7280;
+    color: var(--color-text-secondary, #9ca3af);
   }
   .metric-value {
     font-size: 1.8rem;
     font-weight: 700;
-    color: #111827;
+    color: var(--color-text-primary, inherit);
     margin-top: 0.3rem;
   }
   .section-card {
-    background: white;
-    border: 1px solid #e5e7eb;
+    background: var(--color-background-card, #1e293b);
+    border: 1px solid var(--color-border, #334155);
     border-radius: 8px;
     padding: 1.5rem;
     margin-bottom: 2rem;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   }
   .section-card h2 {
     font-size: 1.25rem;
     margin-top: 0;
     margin-bottom: 1rem;
-    color: #111827;
+    color: var(--color-text-primary, inherit);
   }
   .section-card h3 {
     font-size: 1rem;
-    color: #374151;
+    color: var(--color-text-primary, inherit);
     margin-bottom: 0.5rem;
   }
   .tables-grid {
@@ -882,7 +891,7 @@
   }
   .assignment-block {
     margin-bottom: 1.5rem;
-    border-top: 1px solid #f3f4f6;
+    border-top: 1px solid var(--color-border, #334155);
     padding-top: 1rem;
   }
   .data-table {
@@ -893,29 +902,32 @@
   .data-table th, .data-table td {
     padding: 0.6rem 0.8rem;
     text-align: left;
-    border-bottom: 1px solid #f3f4f6;
+    border-bottom: 1px solid var(--color-border, #334155);
     font-size: 0.9rem;
+    color: var(--color-text-primary, inherit);
   }
   .data-table th {
-    background: #f9fafb;
-    color: #4b5563;
+    background: var(--color-background-elevated, #0f172a);
+    color: var(--color-text-secondary, #9ca3af);
     font-weight: 600;
   }
   .empty-cell {
     text-align: center;
-    color: #9ca3af;
+    color: var(--color-text-secondary, #9ca3af);
     padding: 1rem;
   }
   .badge {
-    background: #e0e7ff;
-    color: #3730a3;
+    background: rgba(99, 102, 241, 0.15);
+    color: #818cf8;
+    border: 1px solid rgba(99, 102, 241, 0.3);
     padding: 0.2rem 0.5rem;
     border-radius: 4px;
     font-size: 0.8rem;
   }
   .status-tag.active {
-    background: #d1fae5;
-    color: #065f46;
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.3);
     padding: 0.2rem 0.5rem;
     border-radius: 4px;
     font-size: 0.8rem;
@@ -923,19 +935,21 @@
   .modal-backdrop {
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,0.5);
+    background: rgba(0,0,0,0.6);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 1000;
   }
   .modal-content {
-    background: white;
+    background: var(--color-background-card, #1e293b);
+    color: var(--color-text-primary, inherit);
+    border: 1px solid var(--color-border, #334155);
     border-radius: 8px;
     width: 100%;
     max-width: 520px;
     padding: 2rem;
-    box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+    box-shadow: 0 20px 25px -5px rgba(0,0,0,0.3);
   }
   .form-group {
     margin-bottom: 1.2rem;
@@ -945,12 +959,14 @@
     margin-bottom: 0.4rem;
     font-weight: 500;
     font-size: 0.9rem;
-    color: #374151;
+    color: var(--color-text-primary, inherit);
   }
   .form-group input, .form-group select {
     width: 100%;
     padding: 0.6rem;
-    border: 1px solid #d1d5db;
+    background: var(--color-background-elevated, #0f172a);
+    color: var(--color-text-primary, inherit);
+    border: 1px solid var(--color-border, #475569);
     border-radius: 6px;
     font-size: 0.95rem;
     box-sizing: border-box;

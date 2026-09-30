@@ -1,5 +1,8 @@
 import type { ApiConfig } from "./config";
 import { ApiError } from "./errors";
+
+export { ApiError };
+
 export function createHttp(config: ApiConfig, fetcher: typeof fetch = fetch) {
   let csrfToken: string | undefined;
   let authToken: string | undefined =
@@ -116,6 +119,12 @@ export function createHttp(config: ApiConfig, fetcher: typeof fetch = fetch) {
         const errorMessage =
           failure?.error?.message ?? failure?.message ?? `API request failed (${response.status})`;
 
+        console.error(`[API Error ${response.status}] ${method} ${path}:`, {
+          status: response.status,
+          message: errorMessage,
+          payload
+        });
+
         throw new ApiError(
           errorMessage,
           response.status,
@@ -142,4 +151,72 @@ export function createHttp(config: ApiConfig, fetcher: typeof fetch = fetch) {
   };
 
   return instance;
+}
+
+export const BASE_URL = "/api";
+
+export async function apiFetch<T = any>(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const url = endpoint.startsWith("http")
+    ? endpoint
+    : `${BASE_URL}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
+
+  const hasBody = options.body !== undefined && options.body !== null;
+  const method = options.method || "GET";
+
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    ...((options.headers as Record<string, string>) || {})
+  };
+
+  if (hasBody && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
+
+  if (typeof localStorage !== "undefined") {
+    const token = localStorage.getItem("token");
+    if (token && !headers["Authorization"]) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+  }
+
+  const response = await fetch(url, {
+    ...options,
+    headers
+  });
+
+  let data: any;
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+  } else {
+    data = await response.text();
+  }
+
+  if (!response.ok) {
+    const errorMessage =
+      (typeof data === "object" && data !== null && (data.message || data.error?.message)) ||
+      (typeof data === "string" && data.length > 0 ? data : response.statusText) ||
+      `HTTP Error ${response.status}`;
+
+    console.error(`[API Error ${response.status}] ${method} ${url}:`, {
+      status: response.status,
+      message: errorMessage,
+      data
+    });
+
+    throw new ApiError(
+      errorMessage,
+      response.status,
+      typeof data === "object" && data?.error?.code ? data.error.code : "REQUEST_FAILED"
+    );
+  }
+
+  return data as T;
 }

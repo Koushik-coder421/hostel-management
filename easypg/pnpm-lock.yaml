@@ -14,6 +14,12 @@ importers:
       '@astryx-svelte/theme-neutral':
         specifier: 0.5.2
         version: 0.5.2(@astryx-svelte/core@0.5.2(@stylexjs/stylex@0.19.0)(@stylexjs/unplugin@0.19.0(unplugin@2.3.11))(svelte@5.57.1)(vite@8.3.0(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)))(svelte@5.57.1)
+      '@point-grab/core':
+        specifier: ^0.1.6
+        version: 0.1.6
+      '@point-grab/svelte':
+        specifier: ^0.1.6
+        version: 0.1.6(@point-grab/core@0.1.6)(svelte@5.57.1)
       '@stylexjs/stylex':
         specifier: 0.19.0
         version: 0.19.0
@@ -418,6 +424,15 @@ packages:
     resolution: {integrity: sha512-oxMK4vllB9RK5NQ2l1pq1IfOf2AvnEuj/vYGDj0H2nMtmtZpKtCwt/l00GEO6xjGfpBNAvjovvYdCm50dRQkpQ==}
     engines: {node: '>=20'}
     hasBin: true
+
+  '@point-grab/core@0.1.6':
+    resolution: {integrity: sha512-V/IgoC4poGLAjMnEM+knn0+HKRRJAnGkXpoq9lSFch59/WGPcN4M/VKvp1Y0oemtZ111LKEph3EIFoAhhCMu6Q==}
+
+  '@point-grab/svelte@0.1.6':
+    resolution: {integrity: sha512-gYL3RxMvplE3xP1IV64dPeOZ0F1Nz5Hgd++e+Yw3fnc08YFerfibVdXtQ+lZzTpZ1O6uQXJiFpdXW94nbmKL0A==}
+    peerDependencies:
+      '@point-grab/core': 0.1.6
+      svelte: '>=4.0.0'
 
   '@polka/url@1.0.0-next.29':
     resolution: {integrity: sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww==}
@@ -1481,6 +1496,13 @@ snapshots:
   '@playwright/test@1.63.0':
     dependencies:
       playwright: 1.63.0
+
+  '@point-grab/core@0.1.6': {}
+
+  '@point-grab/svelte@0.1.6(@point-grab/core@0.1.6)(svelte@5.57.1)':
+    dependencies:
+      '@point-grab/core': 0.1.6
+      svelte: 5.57.1
 
   '@polka/url@1.0.0-next.29': {}
 

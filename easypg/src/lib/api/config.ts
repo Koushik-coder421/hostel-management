@@ -4,7 +4,7 @@ export interface ApiConfig {
 }
 export function parseConfig(
   mode: string | undefined,
-  baseUrl = "/api/v1",
+  baseUrl = "/api",
 ): ApiConfig {
   if (mode !== undefined && mode !== "demo" && mode !== "live") {
     throw new Error("VITE_API_MODE must be demo or live");
