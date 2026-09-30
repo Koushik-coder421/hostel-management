@@ -72,7 +72,7 @@
     <div>
       <p {...sx(styles.eyebrow)}>People & stays</p>
       <div {...sx(styles.titleRow)}>
-        <Heading level={1}>Residents</Heading>{#if data.hostel}<Badge
+        <Heading level={1}>Residents</Heading>{#if data.hostel}<Badge label={data.hostel.name} variant="info" /><Badge
             label={data.hostel.code}
             xstyle={styles.codeBadge}
           />{/if}
@@ -186,14 +186,14 @@
                 ></TableCell
               >
               <TableCell
-                >{#if resident.roomNumber}<Text as="span" xstyle={styles.number}
-                    >Room {resident.roomNumber}{#if resident.bedLabel}<Text
+                >{#if resident.roomNumber && resident.roomNumber.trim() !== ''}<Text as="span" xstyle={styles.number}
+                    >Room {resident.roomNumber}{#if resident.bedLabel && resident.bedLabel.trim() !== ''}<Text
                         as="span"
                         type="supporting"
                       >
                         ({resident.bedLabel})</Text
                       >{/if}</Text
-                  >{:else}<Text as="span" type="supporting">No allocation</Text>{/if}</TableCell
+                  >{:else}<Text as="span" type="supporting">Not Allocated</Text>{/if}</TableCell
               >
               <TableCell
                 ><Text as="span" xstyle={styles.secondary}

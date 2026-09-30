@@ -551,3 +551,18 @@ CREATE TABLE IF NOT EXISTS visit_tenant (
     FOREIGN KEY (visit_id) REFERENCES visit(visit_id) ON DELETE CASCADE ON UPDATE CASCADE,
     FOREIGN KEY (tenant_id) REFERENCES tenant(tenant_id) ON DELETE RESTRICT ON UPDATE CASCADE
 );
+
+-- =========================================================
+-- 7. AUDIT LOG & HISTORY TRACKING
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS audit_log (
+    audit_id INT AUTO_INCREMENT PRIMARY KEY,
+    entity_type VARCHAR(50) NOT NULL,
+    entity_id VARCHAR(50) NOT NULL,
+    action VARCHAR(50) NOT NULL,
+    old_values JSON NULL,
+    new_values JSON NULL,
+    performed_by VARCHAR(50) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

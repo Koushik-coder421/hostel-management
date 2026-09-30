@@ -127,11 +127,26 @@ export const createRoom = async (req: Request, res: Response, next: NextFunction
             [floor_id, hostelId, room_number, room_type || null, capacity, status]
         );
 
+        const roomId = result.insertId;
+
+        // Auto-generate beds for the room according to capacity (e.g. Bed A, Bed B, etc.)
+        const bedLetters = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
+        const numCapacity = Number(capacity);
+        for (let i = 0; i < numCapacity; i++) {
+            const bedLabel = `Bed ${bedLetters[i] || (i + 1)}`;
+            await pool.query(
+                `INSERT INTO bed (room_id, bed_number, bed_type, status)
+                 VALUES (?, ?, ?, 'AVAILABLE')
+                 ON DUPLICATE KEY UPDATE status = VALUES(status)`,
+                [roomId, bedLabel, room_type || 'STANDARD']
+            );
+        }
+
         res.status(201).json({
             status: "success",
-            message: "Room created successfully",
+            message: "Room and beds created successfully",
             data: {
-                room_id: result.insertId,
+                room_id: roomId,
                 floor_id,
                 hostel_id: hostelId,
                 room_number,

@@ -16,7 +16,7 @@ export function parseConfig(
   }
   if (baseUrl.startsWith("//"))
     throw new Error("Protocol-relative API URLs are not supported");
-  return { mode: mode ?? "demo", baseUrl: baseUrl.replace(/\/$/, "") };
+  return { mode: mode ?? "live", baseUrl: baseUrl.replace(/\/$/, "") };
 }
 export const config = parseConfig(
   import.meta.env.VITE_API_MODE,

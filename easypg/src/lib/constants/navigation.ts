@@ -66,6 +66,7 @@ const SUPERVISOR_TENANT_ADMIN_NAV: NavItem[] = [
   { label: 'Rooms & Beds', href: '/rooms', icon: 'bed-double', mobileNav: true },
   { label: 'Check-In', href: '/check-ins', icon: 'log-in', mobileNav: false },
   { label: 'Check-Out', href: '/check-outs', icon: 'log-out', mobileNav: false },
+  { label: 'Visitor Management', href: '/visitors', icon: 'users', mobileNav: false },
   { label: 'Settings', href: '/settings', icon: 'settings', mobileNav: false }
 ];
 
@@ -73,7 +74,14 @@ const SUPERVISOR_MAINTENANCE_NAV: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: 'layout-dashboard', mobileNav: true },
   { label: 'Hostels', href: '/hostels', icon: 'home', mobileNav: true },
   { label: 'Rooms & Beds', href: '/rooms', icon: 'bed-double', mobileNav: true },
+  { label: 'Maintenance', href: '/maintenance', icon: 'wrench', mobileNav: true },
+  { label: 'Expenses', href: '/expenses', icon: 'receipt', mobileNav: false },
   { label: 'Settings', href: '/settings', icon: 'settings', mobileNav: false }
+];
+
+const TENANT_NAV: NavItem[] = [
+  { label: 'Dashboard', href: '/dashboard', icon: 'layout-dashboard', mobileNav: true },
+  { label: 'Settings', href: '/settings', icon: 'settings', mobileNav: true }
 ];
 
 export function getNavItems(role: AppRole | string, responsibility?: string | null): NavItem[] {
@@ -102,6 +110,11 @@ export function getNavItems(role: AppRole | string, responsibility?: string | nu
         return SUPERVISOR_MAINTENANCE_NAV;
       }
       return SUPERVISOR_TENANT_ADMIN_NAV;
+    case 'tenant':
+    case 'TENANT':
+    case 'resident':
+    case 'RESIDENT':
+      return TENANT_NAV;
     default:
       return MANAGER_NAV;
   }

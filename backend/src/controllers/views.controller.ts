@@ -1,11 +1,13 @@
 import { Request, Response, NextFunction } from "express";
+import bcrypt from "bcryptjs";
 import pool from "../config/database";
-import { buildUserScope } from "../utils/scope";
+import { buildUserScope, activeHostelStore } from "../utils/scope";
 import { AppError } from "../middleware/errorHandler";
 
 function mapRole(role: string): string {
     if (role === "SUPERADMIN" || role === "ADMIN" || role === "HEAD") return "platform_admin";
     if (role === "PARTNER") return "organization_admin";
+    if (role === "TENANT" || role === "tenant" || role === "resident" || role === "RESIDENT") return "resident";
     return "manager";
 }
 
@@ -208,7 +210,30 @@ export const getViewResidents = async (req: Request, res: Response, next: NextFu
     try {
         const user = (req as any).user;
         const scope = user ? await buildUserScope(user) : { allowedHostelIds: [], role: "MANAGER", activeHostelId: "" };
-        const activeHostel = await getActiveHostel(scope);
+        const isGlobalAdmin = user?.role === "SUPERADMIN" || user?.role === "ADMIN" || user?.role === "HEAD";
+        const hostelIdParam = (req.query.hostelId as string || req.query.hostel_id as string || "").trim();
+
+        let currentHostel = await getActiveHostel(scope);
+        if (hostelIdParam) {
+            const [hRows] = await pool.query<any[]>(
+                "SELECT hostel_id, name, hostel_code, address, status FROM hostel WHERE hostel_id = ?",
+                [hostelIdParam]
+            );
+            if (hRows.length > 0) {
+                const h = hRows[0];
+                currentHostel = {
+                    id: String(h.hostel_id),
+                    name: h.name,
+                    code: h.hostel_code || `HSTL-${h.hostel_id}`,
+                    organizationId: "1",
+                    city: h.address || "Main City",
+                    addressLine1: h.address || "",
+                    status: h.status === "ACTIVE" ? ("active" as const) : ("inactive" as const),
+                    timezone: "Asia/Kolkata"
+                };
+            }
+        }
+
         const searchQuery = (req.query.q as string || "").trim().toLowerCase();
         const statusFilter = (req.query.status as string || "all").trim().toLowerCase();
 
@@ -223,9 +248,26 @@ export const getViewResidents = async (req: Request, res: Response, next: NextFu
             WHERE 1=1
         `;
         const params: any[] = [];
-        if (scope.activeHostelId) {
-            sql += ` AND (f.hostel_id = ? OR f.hostel_id IS NULL)`;
-            params.push(scope.activeHostelId);
+
+        if (!isGlobalAdmin) {
+            if (scope.allowedHostelIds.length === 0) {
+                sql += ` AND 1=0`;
+            } else if (hostelIdParam) {
+                if (!(scope.allowedHostelIds as string[]).includes(hostelIdParam)) {
+                    sql += ` AND 1=0`;
+                } else {
+                    sql += ` AND f.hostel_id = ?`;
+                    params.push(hostelIdParam);
+                }
+            } else {
+                sql += ` AND (f.hostel_id IN (?) OR f.hostel_id IS NULL)`;
+                params.push(scope.allowedHostelIds);
+            }
+        } else {
+            if (hostelIdParam) {
+                sql += ` AND f.hostel_id = ?`;
+                params.push(hostelIdParam);
+            }
         }
 
         const [rows] = await pool.query<any[]>(sql, params);
@@ -241,8 +283,8 @@ export const getViewResidents = async (req: Request, res: Response, next: NextFu
                 gender: (t.gender || "undisclosed").toLowerCase(),
                 status: status as "active" | "checked_out",
                 createdAt: (t.created_at ? new Date(t.created_at) : new Date()).toISOString(),
-                roomNumber: t.room_number || undefined,
-                bedLabel: t.bed_number || undefined,
+                roomNumber: t.room_number ? String(t.room_number) : undefined,
+                bedLabel: t.bed_number ? String(t.bed_number) : undefined,
                 agreedRentPaise: t.rent_amount ? String(Math.round(Number(t.rent_amount) * 100)) : undefined,
                 startDate: t.start_date ? String(t.start_date).slice(0, 10) : undefined
             };
@@ -255,16 +297,15 @@ export const getViewResidents = async (req: Request, res: Response, next: NextFu
             residents = residents.filter(r => r.fullName.toLowerCase().includes(searchQuery) || r.phone.includes(searchQuery));
         }
 
-        const [allRows] = await pool.query<any[]>("SELECT status FROM tenant");
-        const total = allRows.length;
-        const active = allRows.filter(r => r.status === "ACTIVE").length;
-        const checkedOut = allRows.filter(r => r.status !== "ACTIVE").length;
+        const total = residents.length;
+        const active = residents.filter(r => r.status === "active").length;
+        const checkedOut = residents.filter(r => r.status !== "active").length;
 
         res.json({
             status: "success",
             success: true,
             data: {
-                hostel: activeHostel,
+                hostel: currentHostel,
                 residents,
                 stats: { total, active, checkedOut },
                 filters: { search: searchQuery, status: statusFilter }
@@ -329,20 +370,42 @@ export const getViewResidentById = async (req: Request, res: Response, next: Nex
 
         const [payments] = await pool.query<any[]>(
             `SELECT p.* FROM payment p
-             LEFT JOIN tenant_allocation ta ON p.allocation_id = ta.allocation_id
-             WHERE ta.tenant_id = ?`,
-            [id]
+             WHERE p.tenant_id = ? OR p.allocation_id IN (SELECT allocation_id FROM tenant_allocation WHERE tenant_id = ?)`,
+            [id, id]
         );
 
         const mappedPayments = payments.map((p: any) => ({
             id: String(p.payment_id),
             receivedAt: (p.payment_date ? new Date(p.payment_date) : new Date()).toISOString(),
-            paymentMethod: (p.payment_mode || "upi").toLowerCase(),
-            reference: p.transaction_id || null,
+            paymentMethod: (p.payment_method || p.payment_mode || "upi").toLowerCase(),
+            reference: p.transaction_reference || p.transaction_id || null,
             amountPaise: String(Math.round(Number(p.amount || 0) * 100)),
             status: p.status === "SUCCESS" ? "succeeded" : "pending",
             notes: p.remarks || null
         }));
+
+        const totalPaidAmount = payments
+            .filter((p: any) => p.status === "SUCCESS")
+            .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+
+        const totalBilledAmount = resident.activeAgreement ? 8000 : (totalPaidAmount > 0 ? totalPaidAmount : 0);
+        const totalOutstandingAmount = Math.max(0, totalBilledAmount - totalPaidAmount);
+
+        const invoices = totalBilledAmount > 0 ? [{
+            id: `INV-RES-${id}`,
+            invoiceNumber: `INV-2026-${id}`,
+            residentName: fullName,
+            residentPhone: t.phone || "-",
+            residentId: String(id),
+            totalPaise: String(Math.round(totalBilledAmount * 100)),
+            paidPaise: String(Math.round(totalPaidAmount * 100)),
+            outstandingPaise: String(Math.round(totalOutstandingAmount * 100)),
+            dueDate: new Date().toISOString().slice(0, 10),
+            issueDate: t.start_date ? String(t.start_date).slice(0, 10) : new Date().toISOString().slice(0, 10),
+            periodStart: t.start_date ? String(t.start_date).slice(0, 10) : new Date().toISOString().slice(0, 10),
+            periodEnd: new Date().toISOString().slice(0, 10),
+            status: totalOutstandingAmount <= 0 ? "paid" : "open"
+        }] : [];
 
         res.json({
             status: "success",
@@ -350,12 +413,12 @@ export const getViewResidentById = async (req: Request, res: Response, next: Nex
             data: {
                 resident,
                 location: { buildingName: "Main Building", floorLabel: t.floor_label || null },
-                invoices: [],
+                invoices,
                 payments: mappedPayments,
                 financialSummary: {
-                    totalBilledPaise: "0",
-                    totalPaidPaise: "0",
-                    totalOutstandingPaise: "0"
+                    totalBilledPaise: String(Math.round(totalBilledAmount * 100)),
+                    totalPaidPaise: String(Math.round(totalPaidAmount * 100)),
+                    totalOutstandingPaise: String(Math.round(totalOutstandingAmount * 100))
                 },
                 activityTimeline: []
             }
@@ -703,25 +766,65 @@ export const getViewHostels = async (req: Request, res: Response, next: NextFunc
     try {
         const user = (req as any).user;
         const scope = user ? await buildUserScope(user) : { allowedHostelIds: [], role: "MANAGER", activeHostelId: "" };
+        const isGlobalAdmin = user?.role === "SUPERADMIN" || user?.role === "ADMIN" || user?.role === "HEAD";
 
-        const [hostelsList] = await pool.query<any[]>("SELECT * FROM hostel WHERE status = 'ACTIVE'");
+        let sql = "SELECT * FROM hostel WHERE 1=1";
+        const params: any[] = [];
 
-        const hostels = hostelsList.map((h: any) => ({
-            id: String(h.hostel_id),
-            organizationId: "1",
-            name: h.name,
-            code: h.hostel_code || `HSTL-${h.hostel_id}`,
-            city: h.address || "Main City",
-            addressLine1: h.address || "",
-            status: h.status === "ACTIVE" ? ("active" as const) : ("inactive" as const),
-            timezone: "Asia/Kolkata",
-            physicalBeds: 5,
-            sellableBeds: 5,
-            occupiedBeds: 0,
-            availableBeds: 5,
-            occupancyRate: 0,
-            residentCount: 0,
-            isActive: scope.activeHostelId === String(h.hostel_id)
+        if (!isGlobalAdmin) {
+            if (scope.allowedHostelIds.length === 0) {
+                return res.json({
+                    status: "success",
+                    success: true,
+                    data: { hostels: [], activeHostelId: null }
+                });
+            }
+            sql += " AND hostel_id IN (?)";
+            params.push(scope.allowedHostelIds);
+        }
+
+        sql += " ORDER BY hostel_id DESC";
+
+        const [hostelsList] = await pool.query<any[]>(sql, params);
+
+        const hostels = await Promise.all(hostelsList.map(async (h: any) => {
+            const [[{ total_beds }]] = await pool.query<any[]>(
+                `SELECT COUNT(b.bed_id) as total_beds FROM bed b JOIN room r ON b.room_id = r.room_id JOIN floor f ON r.floor_id = f.floor_id WHERE f.hostel_id = ?`,
+                [h.hostel_id]
+            );
+            const [[{ occupied_beds }]] = await pool.query<any[]>(
+                `SELECT COUNT(b.bed_id) as occupied_beds FROM bed b JOIN room r ON b.room_id = r.room_id JOIN floor f ON r.floor_id = f.floor_id WHERE f.hostel_id = ? AND b.status = 'OCCUPIED'`,
+                [h.hostel_id]
+            );
+            const [[{ resident_count }]] = await pool.query<any[]>(
+                `SELECT COUNT(DISTINCT t.tenant_id) as resident_count FROM tenant t JOIN tenant_allocation ta ON t.tenant_id = ta.tenant_id JOIN bed b ON ta.bed_id = b.bed_id JOIN room r ON b.room_id = r.room_id JOIN floor f ON r.floor_id = f.floor_id WHERE f.hostel_id = ? AND ta.status = 'ACTIVE'`,
+                [h.hostel_id]
+            );
+
+            const physicalBeds = Number(total_beds || 0);
+            const sellableBeds = Number(total_beds || 0);
+            const occupiedBeds = Number(occupied_beds || 0);
+            const availableBeds = Math.max(0, sellableBeds - occupiedBeds);
+            const occupancyRate = sellableBeds > 0 ? Number(((occupiedBeds / sellableBeds) * 100).toFixed(1)) : 0;
+
+            return {
+                id: String(h.hostel_id),
+                organizationId: "1",
+                name: h.name,
+                code: h.hostel_code || `HSTL-${h.hostel_id}`,
+                city: h.address || "Main City",
+                addressLine1: h.address || "",
+                status: h.status === "ACTIVE" ? ("active" as const) : ("inactive" as const),
+                deactivation_reason: h.deactivation_reason || null,
+                timezone: "Asia/Kolkata",
+                physicalBeds,
+                sellableBeds,
+                occupiedBeds,
+                availableBeds,
+                occupancyRate,
+                residentCount: Number(resident_count || 0),
+                isActive: scope.activeHostelId === String(h.hostel_id)
+            };
         }));
 
         res.json({
@@ -808,6 +911,10 @@ export const getViewManagers = async (req: Request, res: Response, next: NextFun
 export const handleSwitchHostel = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { hostelId } = req.body;
+        const user = (req as any).user;
+        if (user && hostelId) {
+            activeHostelStore.set(user.staff_id, String(hostelId));
+        }
         res.json({
             status: "success",
             success: true,
@@ -820,13 +927,25 @@ export const handleSwitchHostel = async (req: Request, res: Response, next: Next
 
 export const handleCheckIn = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { fullName, phone, email, gender, bedId, checkInDate, agreedRentPaise } = req.body;
+        const { fullName, phone, email, password, gender, bedId, checkInDate, agreedRentPaise } = req.body;
         const rentAmount = agreedRentPaise ? (Number(agreedRentPaise) / 100) : 8000;
+
+        const initialPassword = password || "resident123";
+        const passwordHash = await bcrypt.hash(initialPassword, 10);
+        const residentEmail = email || `${(fullName || "resident").toLowerCase().replace(/\s+/g, '_')}_${Date.now()}@tenant.com`;
+
+        // Provision Staff Login Account for Tenant/Resident
+        await pool.query(
+            `INSERT INTO staff (name, email, password_hash, phone, role, status)
+             VALUES (?, ?, ?, ?, 'TENANT', 'ACTIVE')
+             ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash), status = 'ACTIVE'`,
+            [fullName || "New Resident", residentEmail, passwordHash, phone || null]
+        );
 
         const [tResult] = await pool.query<any>(
             `INSERT INTO tenant (name, first_name, email, phone, gender, status)
              VALUES (?, ?, ?, ?, ?, 'ACTIVE')`,
-            [fullName || "New Resident", fullName || "New Resident", email || null, phone || "9000000000", (gender || "male").toUpperCase()]
+            [fullName || "New Resident", fullName || "New Resident", residentEmail, phone || "9000000000", (gender || "male").toUpperCase()]
         );
 
         const tenantId = tResult.insertId;
@@ -856,16 +975,56 @@ export const handleCheckOut = async (req: Request, res: Response, next: NextFunc
     try {
         const { residentId, bedId } = req.body;
 
+        if (!residentId) {
+            return next(new AppError("residentId is required for checkout", 400));
+        }
+
+        // 1. Calculate total paid vs total billed/agreed rent for this resident
+        const [payments] = await pool.query<any[]>(
+            `SELECT COALESCE(SUM(amount), 0) as total_paid
+             FROM payment
+             WHERE (tenant_id = ? OR allocation_id IN (SELECT allocation_id FROM tenant_allocation WHERE tenant_id = ?))
+               AND status = 'SUCCESS'`,
+            [residentId, residentId]
+        );
+        const totalPaid = Number(payments[0].total_paid || 0);
+
+        const [allocations] = await pool.query<any[]>(
+            `SELECT ta.allocation_id, NULL as rent_amount FROM tenant_allocation ta WHERE ta.tenant_id = ? AND ta.status = 'ACTIVE'`,
+            [residentId]
+        );
+
+        const agreedRent = allocations.length > 0 && allocations[0].rent_amount ? Number(allocations[0].rent_amount) : 8000;
+        const outstandingDues = Math.max(0, agreedRent - totalPaid);
+
+        if (outstandingDues > 0) {
+            return next(new AppError(`Cannot check out resident: Outstanding dues of ₹${outstandingDues} must be settled before checkout.`, 400));
+        }
+
         await pool.query("UPDATE tenant SET status = 'INACTIVE' WHERE tenant_id = ?", [residentId]);
         await pool.query("UPDATE tenant_allocation SET status = 'COMPLETED', end_date = CURRENT_DATE WHERE tenant_id = ?", [residentId]);
-        if (bedId) {
-            await pool.query("UPDATE bed SET status = 'AVAILABLE' WHERE bed_id = ?", [bedId]);
+        
+        let targetBedId = bedId;
+        if (!targetBedId) {
+            const [beds] = await pool.query<any[]>(
+                "SELECT bed_id FROM tenant_allocation WHERE tenant_id = ? ORDER BY allocation_id DESC LIMIT 1",
+                [residentId]
+            );
+            if (beds.length > 0) targetBedId = beds[0].bed_id;
+        }
+
+        if (targetBedId) {
+            await pool.query("UPDATE bed SET status = 'AVAILABLE' WHERE bed_id = ?", [targetBedId]);
+            const [rooms] = await pool.query<any[]>("SELECT room_id FROM bed WHERE bed_id = ?", [targetBedId]);
+            if (rooms.length > 0) {
+                await pool.query("UPDATE room SET status = 'AVAILABLE' WHERE room_id = ? AND status = 'FULL'", [rooms[0].room_id]);
+            }
         }
 
         res.json({
             status: "success",
             success: true,
-            message: "Resident checked out successfully"
+            message: "Resident checked out successfully and bed was returned to available inventory"
         });
     } catch (err) {
         next(err);
@@ -891,17 +1050,255 @@ export const handleRecordPayment = async (req: Request, res: Response, next: Nex
     try {
         const { residentId, amountPaise, paymentMethod, reference } = req.body;
         const amount = amountPaise ? (Number(amountPaise) / 100) : 0;
+        const user = (req as any).user;
+        const recordedBy = user?.staff_id || 1;
+
+        let allocationId: number | null = null;
+        if (residentId) {
+            const [allocs] = await pool.query<any[]>(
+                "SELECT allocation_id FROM tenant_allocation WHERE tenant_id = ? AND status = 'ACTIVE' ORDER BY allocation_id DESC LIMIT 1",
+                [residentId]
+            );
+            if (allocs.length > 0) allocationId = allocs[0].allocation_id;
+        }
 
         await pool.query(
-            `INSERT INTO payment (amount, payment_mode, transaction_id, status, payment_date)
-             VALUES (?, ?, ?, 'SUCCESS', NOW())`,
-            [amount, (paymentMethod || "UPI").toUpperCase(), reference || null]
+            `INSERT INTO payment (tenant_id, allocation_id, amount, payment_type, payment_method, transaction_reference, status, recorded_by, payment_date)
+             VALUES (?, ?, ?, 'RENT', ?, ?, 'SUCCESS', ?, NOW())`,
+            [
+                residentId || null,
+                allocationId,
+                amount,
+                (paymentMethod || "UPI").toUpperCase(),
+                reference || null,
+                recordedBy
+            ]
         );
 
         res.json({
             status: "success",
             success: true,
             message: "Payment recorded successfully"
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
+export const getViewVisitors = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const user = (req as any).user;
+        const scope = user ? await buildUserScope(user) : { allowedHostelIds: [], role: "MANAGER", activeHostelId: "", responsibility: null };
+
+        // Enforce Responsibility Guard: Block Maintenance Supervisors from accessing Visitor Management
+        if (scope.role === "SUPERVISOR" && scope.responsibility === "MAINTENANCE") {
+            return next(new AppError("Forbidden: Maintenance supervisors do not have access to Visitor Management.", 403));
+        }
+
+        const isGlobalAdmin = user?.role === "SUPERADMIN" || user?.role === "ADMIN" || user?.role === "HEAD";
+        const activeHostel = await getActiveHostel(scope);
+
+        let hostelCondition = "";
+        const params: any[] = [];
+        if (!isGlobalAdmin) {
+            if (scope.allowedHostelIds.length === 0) {
+                hostelCondition = " WHERE 1=0";
+            } else {
+                hostelCondition = " WHERE v.hostel_id IN (?)";
+                params.push(scope.allowedHostelIds);
+            }
+        }
+
+        const [visitorRows] = await pool.query<any[]>(
+            `SELECT v.visitor_id, v.visitor_name, v.phone, v.purpose, v.relation,
+                    v.entry_time, v.exit_time, v.status,
+                    t.name as resident_name, r.room_number, h.name as hostel_name
+             FROM visitor v
+             LEFT JOIN tenant t ON v.tenant_id = t.tenant_id
+             LEFT JOIN hostel h ON v.hostel_id = h.hostel_id
+             LEFT JOIN room r ON v.room_id = r.room_id
+             ${hostelCondition}
+             ORDER BY v.visitor_id DESC LIMIT 100`,
+            params
+        );
+
+        const mappedVisitors = visitorRows.map((v: any) => ({
+            id: String(v.visitor_id),
+            visitorName: v.visitor_name,
+            phone: v.phone || "",
+            purpose: v.purpose || "Personal Visit",
+            relation: v.relation || "Guest",
+            residentName: v.resident_name || "Resident",
+            roomNumber: v.room_number || "101",
+            hostelName: v.hostel_name || "Hostel A",
+            entryTime: v.entry_time ? new Date(v.entry_time).toISOString() : new Date().toISOString(),
+            exitTime: v.exit_time ? new Date(v.exit_time).toISOString() : null,
+            status: v.status === "CHECKED_IN" || !v.exit_time ? "IN_HOUSE" : "DEPARTED"
+        }));
+
+        let residentCondition = " WHERE t.status = 'ACTIVE'";
+        const residentParams: any[] = [];
+        if (!isGlobalAdmin) {
+            if (scope.allowedHostelIds.length > 0) {
+                residentCondition += " AND f.hostel_id IN (?)";
+                residentParams.push(scope.allowedHostelIds);
+            } else {
+                residentCondition += " AND 1=0";
+            }
+        }
+
+        const [residentRows] = await pool.query<any[]>(
+            `SELECT t.tenant_id, t.name as resident_name,
+                    h.hostel_id, h.name as hostel_name,
+                    r.room_id, r.room_number, b.bed_number
+             FROM tenant t
+             JOIN tenant_allocation ta ON t.tenant_id = ta.tenant_id AND ta.status = 'ACTIVE'
+             JOIN bed b ON ta.bed_id = b.bed_id
+             JOIN room r ON b.room_id = r.room_id
+             JOIN floor f ON r.floor_id = f.floor_id
+             JOIN hostel h ON f.hostel_id = h.hostel_id
+             ${residentCondition}`,
+            residentParams
+        );
+
+        const mappedResidents = residentRows.map((r: any) => ({
+            tenantId: String(r.tenant_id),
+            residentName: r.resident_name || `Resident #${r.tenant_id}`,
+            hostelId: String(r.hostel_id),
+            hostelName: r.hostel_name,
+            roomId: String(r.room_id),
+            roomNumber: String(r.room_number),
+            bedLabel: String(r.bed_number)
+        }));
+
+        res.json({
+            status: "success",
+            data: {
+                activeHostel,
+                visitors: mappedVisitors,
+                residents: mappedResidents,
+                metrics: {
+                    totalInHouse: mappedVisitors.filter((v: any) => v.status === "IN_HOUSE").length,
+                    totalToday: mappedVisitors.length
+                }
+            }
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const handleLogVisitor = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { visitorName, phone, purpose, relation, tenantId } = req.body;
+
+        if (!visitorName || !tenantId) {
+            return next(new AppError("visitorName and tenantId are required", 400));
+        }
+
+        // Resolve resident allocation and hostel details
+        const [resDetails] = await pool.query<any[]>(
+            `SELECT t.tenant_id, f.hostel_id, r.room_id
+             FROM tenant t
+             JOIN tenant_allocation ta ON t.tenant_id = ta.tenant_id AND ta.status = 'ACTIVE'
+             JOIN bed b ON ta.bed_id = b.bed_id
+             JOIN room r ON b.room_id = r.room_id
+             JOIN floor f ON r.floor_id = f.floor_id
+             WHERE t.tenant_id = ?`,
+            [tenantId]
+        );
+
+        if (resDetails.length === 0) {
+            return next(new AppError("Active stay allocation not found for selected resident", 404));
+        }
+
+        const { hostel_id, room_id } = resDetails[0];
+
+        await pool.query(
+            `INSERT INTO visitor (visitor_name, phone, purpose, relation, tenant_id, hostel_id, room_id, entry_time, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), 'CHECKED_IN')`,
+            [visitorName, phone || null, purpose || "Personal Visit", relation || "Guest", tenantId, hostel_id, room_id]
+        );
+
+        res.json({
+            status: "success",
+            success: true,
+            message: "Visitor entry logged successfully"
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
+export const handleCheckoutVisitor = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const visitorId = req.params.id;
+        await pool.query("UPDATE visitor SET status = 'DEPARTED', exit_time = NOW() WHERE visitor_id = ?", [visitorId]);
+        res.json({
+            status: "success",
+            success: true,
+            message: "Visitor checked out successfully"
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
+export const getViewMaintenance = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const user = (req as any).user;
+        const scope = user ? await buildUserScope(user) : { allowedHostelIds: [], role: "MANAGER", activeHostelId: "" };
+        const activeHostel = await getActiveHostel(scope);
+
+        let query = `
+            SELECT mc.*, t.name as tenant_name, t.phone as tenant_phone
+            FROM maintenance_complaint mc
+            JOIN tenant t ON mc.tenant_id = t.tenant_id
+            ORDER BY mc.complaint_id DESC
+        `;
+        const [complaints] = await pool.query<any[]>(query);
+
+        res.json({
+            status: "success",
+            data: {
+                activeHostel,
+                complaints,
+                metrics: {
+                    totalOpen: complaints.filter(c => c.status === 'OPEN').length,
+                    totalCount: complaints.length
+                }
+            }
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
+export const getViewExpenses = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const user = (req as any).user;
+        const scope = user ? await buildUserScope(user) : { allowedHostelIds: [], role: "MANAGER", activeHostelId: "" };
+        const activeHostel = await getActiveHostel(scope);
+
+        const [expenses] = await pool.query<any[]>(
+            `SELECT e.*, h.name as hostel_name, ec.category_name, s.name as recorded_by_staff
+             FROM expense e
+             LEFT JOIN hostel h ON e.hostel_id = h.hostel_id
+             LEFT JOIN expense_category ec ON e.expense_category_id = ec.expense_category_id
+             LEFT JOIN staff s ON e.recorded_by = s.staff_id
+             ORDER BY e.expense_date DESC`
+        );
+
+        const [categories] = await pool.query<any[]>("SELECT * FROM expense_category WHERE status = 'ACTIVE'");
+
+        res.json({
+            status: "success",
+            data: {
+                activeHostel,
+                expenses,
+                categories,
+                totalAmount: expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)
+            }
         });
     } catch (err) {
         next(err);

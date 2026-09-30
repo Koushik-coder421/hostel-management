@@ -152,3 +152,22 @@ export async function assignSupervisorHostel(payload: { supervisor_id: number; h
     body: JSON.stringify(payload)
   });
 }
+
+export async function updateStaffProfile(staffId: number, payload: { name?: string; email?: string; phone?: string; status?: "ACTIVE" | "INACTIVE"; password?: string }) {
+  return apiFetch(`/hierarchy/staff/${staffId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function elevateStaffRole(staffId: number, payload: { targetRole: "MANAGER" | "PARTNER" | "HEAD"; partner_id?: number; head_id?: number }) {
+  return apiFetch(`/hierarchy/staff/${staffId}/elevate`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function fetchStaffHistory(staffId: number) {
+  const json = await apiFetch<any>(`/hierarchy/staff/${staffId}/history`);
+  return json.data || json;
+}

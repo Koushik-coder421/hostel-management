@@ -2,6 +2,7 @@
   import AppShell from '$lib/components/app-shell/AppShell.svelte';
   import { getNavItems, getMobileNavItems } from '$lib/constants/navigation.js';
   import { page } from '$app/stores';
+  import { enhance } from '$lib/api/forms';
 
   let { data, children } = $props();
 
@@ -18,6 +19,7 @@
   activeHostelId={data.scope?.activeHostelId ?? ''}
   hostels={data.hostels ?? []}
   title="Dashboard"
+  enhanceAction={enhance}
 >
   {@render children()}
 </AppShell>

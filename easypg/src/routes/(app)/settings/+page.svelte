@@ -10,6 +10,21 @@
   import LogOut from '@lucide/svelte/icons/log-out';
 
   let { data }: { data: PageData } = $props();
+
+  function formatActiveRole(role?: string, resp?: string | null): string {
+    if (!role) return 'Resident';
+    const r = role.toLowerCase();
+    if (r === 'supervisor') {
+      if (resp === 'MAINTENANCE') return 'Supervisor — Maintenance & Repairs';
+      if (resp === 'TENANT_ADMIN') return 'Supervisor — Tenant Allocation & Visitors';
+      return 'Supervisor';
+    }
+    if (r === 'manager') return 'Property Manager';
+    if (r === 'partner' || r === 'org_admin' || r === 'organization_admin') return 'Partner / Organization Admin';
+    if (r === 'head') return 'Head Admin';
+    if (r === 'superadmin' || r === 'platform_admin') return 'Platform Admin';
+    return role;
+  }
 </script>
 
 <svelte:head><title>Settings — EasyPG</title></svelte:head>
@@ -34,7 +49,7 @@
       <div {...sx(styles.profileCopy)}>
         <strong {...sx(styles.profileName)}>{data.user?.name}</strong>
         <span {...sx(styles.profileEmail)}>{data.user?.email}</span>
-        <Badge variant="neutral" label={data.scope?.role ?? 'resident'} />
+        <Badge variant="neutral" label={formatActiveRole(data.scope?.role, (data.scope as any)?.responsibility)} />
       </div>
     </div>
   </Card>
@@ -50,7 +65,7 @@
     <dl {...sx(styles.details)}>
       <div {...sx(styles.detailRow)}>
         <dt>Active Role</dt>
-        <dd {...sx(styles.detailValue)}>{data.scope?.role}</dd>
+        <dd {...sx(styles.detailValue)}>{formatActiveRole(data.scope?.role, (data.scope as any)?.responsibility)}</dd>
       </div>
       <div {...sx(styles.detailRow)}>
         <dt>Organization Scope</dt>

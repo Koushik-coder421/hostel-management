@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { enhance } from '$lib/api/forms';
   import { TopNav, Selector, DropdownMenu, Avatar } from '@astryx-svelte/core';
   import { tick } from 'svelte';
   import { goto } from '$app/navigation';
@@ -19,7 +18,8 @@
     activeHostelId = '',
     showSelector = true,
     user = null,
-    role = 'resident'
+    role = 'resident',
+    enhanceAction = (node: HTMLFormElement) => {}
   }: {
     title?: string;
     hostels?: HostelOption[];
@@ -27,6 +27,7 @@
     showSelector?: boolean;
     user?: { id?: string; name?: string; email?: string } | null;
     role?: string;
+    enhanceAction?: (node: HTMLFormElement) => { destroy?(): void } | void;
   } = $props();
   let selectedHostelId = $state('');
   let formEl: HTMLFormElement | null = $state(null);
@@ -46,7 +47,7 @@
   }
 </script>
 
-<form bind:this={logoutForm} method="POST" data-operation="signOut" use:enhance {...sx(shell.hidden)}></form>
+<form bind:this={logoutForm} method="POST" data-operation="signOut" use:enhanceAction {...sx(shell.hidden)}></form>
 <TopNav label="Workspace controls" xstyle={shell.header}>
   {#snippet startContent()}
     <div {...sx(shell.heading)}>
@@ -58,7 +59,7 @@
       {#if showSelector && hostels.length > 0}
         <form
           method="POST"
-          data-operation="switchHostel" use:enhance
+          data-operation="switchHostel" use:enhanceAction
           bind:this={formEl}
           {...sx(shell.hidden)}
         >

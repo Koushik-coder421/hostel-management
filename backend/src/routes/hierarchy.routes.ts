@@ -14,7 +14,11 @@ import {
     assignPartnerManager,
     assignPartnerHostel,
     assignManagerHostel,
-    assignSupervisorHostel
+    assignSupervisorHostel,
+    updateHierarchyStaff,
+    elevateHierarchyStaffRole,
+    getHierarchyStaffHistory,
+    getResidentStayDetails
 } from "../controllers/hierarchy.controller";
 import { authenticateToken, authorizeRoles } from "../middleware/auth";
 
@@ -22,11 +26,19 @@ const router = Router();
 
 router.use(authenticateToken);
 
+// Resident stay details route
+router.get("/me/stay", getResidentStayDetails);
+
 // Creation routes
 router.post("/head", authorizeRoles("SUPERADMIN", "ADMIN"), createHead);
 router.post("/partner", authorizeRoles("SUPERADMIN", "ADMIN", "HEAD"), createPartner);
 router.post("/manager", authorizeRoles("SUPERADMIN", "ADMIN", "HEAD", "PARTNER"), createManager);
 router.post("/supervisor", authorizeRoles("SUPERADMIN", "ADMIN", "HEAD", "PARTNER", "MANAGER"), createSupervisor);
+
+// Staff Profile & Status Edit, Elevation & History
+router.put("/staff/:id", authorizeRoles("SUPERADMIN", "ADMIN", "HEAD", "PARTNER", "MANAGER"), updateHierarchyStaff);
+router.post("/staff/:id/elevate", authorizeRoles("SUPERADMIN", "ADMIN", "HEAD", "PARTNER"), elevateHierarchyStaffRole);
+router.get("/staff/:id/history", authorizeRoles("SUPERADMIN", "ADMIN", "HEAD", "PARTNER", "MANAGER", "SUPERVISOR"), getHierarchyStaffHistory);
 
 // Dashboard data route
 router.get("/dashboard", authorizeRoles("SUPERADMIN", "ADMIN", "HEAD", "PARTNER", "MANAGER", "SUPERVISOR"), getRoleDashboard);

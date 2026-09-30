@@ -94,6 +94,20 @@ export const seedDatabase = async () => {
             ON DUPLICATE KEY UPDATE role_name=VALUES(role_name);
         `);
 
+        await pool.query(`
+            INSERT INTO expense_category (expense_category_id, category_name, description, status)
+            VALUES
+                (1, 'Plumbing & Water Supply', 'Plumbing repairs, pipe leaks, tap replacements, water pump maintenance', 'ACTIVE'),
+                (2, 'Electrical & Wiring', 'Light fixtures, wiring repairs, switches, MCB breaker replacements', 'ACTIVE'),
+                (3, 'HVAC & Air Conditioning', 'AC servicing, gas filling, exhaust fans', 'ACTIVE'),
+                (4, 'Furniture & Carpentry', 'Bed frame repair, mattress replacement, desk/chair repair', 'ACTIVE'),
+                (5, 'Cleaning & Sanitation', 'Housekeeping supplies, cleaning chemicals, pest control', 'ACTIVE'),
+                (6, 'Internet & Networking', 'Wifi router replacement, broadband bills, cabling', 'ACTIVE'),
+                (7, 'General Maintenance', 'Painting, civil repairs, door locks, hardware', 'ACTIVE'),
+                (8, 'Utilities & Fuel', 'Water tanker supply, generator diesel, gas cylinders', 'ACTIVE')
+            ON DUPLICATE KEY UPDATE category_name=VALUES(category_name);
+        `);
+
         // 2. Create Hostels
         await pool.query(`
             INSERT INTO hostel (hostel_id, hostel_code, name, address, contact_number, status)

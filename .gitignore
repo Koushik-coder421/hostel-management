@@ -26,3 +26,5 @@ Thumbs.db
 scopemap-report.html
 scopemap-findings.json
 impact-report.html
+scopemap.toml
+scopemap.yml

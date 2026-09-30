@@ -10,6 +10,8 @@ export interface UserScope {
     activeHostelId: string;
 }
 
+export const activeHostelStore = new Map<number, string>();
+
 export async function buildUserScope(staff: { staff_id: number; email: string; phone?: string; role: string }): Promise<UserScope> {
     const role = staff.role;
     let allowedHostelIds: string[] = [];
@@ -75,9 +77,24 @@ export async function buildUserScope(staff: { staff_id: number; email: string; p
                 assignmentRole = hsaRows[0].assignment_role;
             }
         }
+    } else if (role === "TENANT" || role === "tenant" || role === "resident" || role === "RESIDENT") {
+        const [tRec] = await pool.query<any[]>(
+            `SELECT f.hostel_id FROM tenant t
+             JOIN tenant_allocation ta ON t.tenant_id = ta.tenant_id AND ta.status = 'ACTIVE'
+             JOIN bed b ON ta.bed_id = b.bed_id
+             JOIN room r ON b.room_id = r.room_id
+             JOIN floor f ON r.floor_id = f.floor_id
+             WHERE t.email = ? OR t.phone = ?`,
+            [staff.email, staff.phone || null]
+        );
+        allowedHostelIds = tRec.map((h) => String(h.hostel_id));
     }
 
-    const activeHostelId = allowedHostelIds.length > 0 ? allowedHostelIds[0] : "";
+    let activeHostelId = allowedHostelIds.length > 0 ? allowedHostelIds[0] : "";
+    const stored = activeHostelStore.get(staff.staff_id);
+    if (stored && (role === "SUPERADMIN" || role === "ADMIN" || allowedHostelIds.includes(stored))) {
+        activeHostelId = stored;
+    }
 
     return {
         userId: String(staff.staff_id),
