@@ -352,6 +352,14 @@ export const createSupervisor = async (req: Request, res: Response, next: NextFu
 
         if (targetHostelId) {
             const roleType = assignment_role || "TENANT_ADMIN";
+            // Enforce Strict 2-Supervisors-Per-Hostel Division Rule (1 TENANT_ADMIN, 1 MAINTENANCE)
+            await connection.query(
+                `UPDATE hostel_supervisor_assignment
+                 SET is_current = FALSE, end_date = ?
+                 WHERE hostel_id = ? AND assignment_role = ? AND is_current = TRUE`,
+                [startDate, targetHostelId, roleType]
+            );
+
             await connection.query(
                 `INSERT INTO hostel_supervisor_assignment (hostel_id, supervisor_id, assignment_role, start_date, is_current)
                  VALUES (?, ?, ?, ?, TRUE)`,
@@ -686,10 +694,10 @@ export const getRoleDashboard = async (req: Request, res: Response, next: NextFu
 export const listPartners = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const [rows] = await pool.query<any[]>(
-            `SELECT p.partner_id, pe.name, pe.email, pe.phone, p.is_active
+            `SELECT p.partner_id, pe.name, pe.email, pe.phone, p.is_active, st.staff_id, COALESCE(st.status, CASE WHEN p.is_active THEN 'ACTIVE' ELSE 'INACTIVE' END) as status
              FROM partner p
              JOIN person pe ON p.person_id = pe.person_id
-             WHERE p.is_active = TRUE
+             LEFT JOIN staff st ON (pe.email = st.email OR pe.phone = st.phone)
              ORDER BY p.partner_id DESC`
         );
         res.json({ status: "success", results: rows.length, data: rows });
@@ -705,13 +713,14 @@ export const listManagers = async (req: Request, res: Response, next: NextFuncti
     try {
         const { partner_id } = req.query;
         let query = `
-            SELECT m.manager_id, pe.name, pe.email, pe.phone, pma.partner_id, partner_pe.name as partner_name
+            SELECT m.manager_id, pe.name, pe.email, pe.phone, m.is_active, pma.partner_id, partner_pe.name as partner_name, st.staff_id, COALESCE(st.status, CASE WHEN m.is_active THEN 'ACTIVE' ELSE 'INACTIVE' END) as status
             FROM manager m
             JOIN person pe ON m.person_id = pe.person_id
+            LEFT JOIN staff st ON (pe.email = st.email OR pe.phone = st.phone)
             LEFT JOIN partner_manager_assignment pma ON m.manager_id = pma.manager_id AND pma.is_current = TRUE
             LEFT JOIN partner p ON pma.partner_id = p.partner_id
             LEFT JOIN person partner_pe ON p.person_id = partner_pe.person_id
-            WHERE m.is_active = TRUE
+            WHERE 1=1
         `;
         const params: any[] = [];
 
@@ -735,10 +744,10 @@ export const listManagers = async (req: Request, res: Response, next: NextFuncti
 export const listHeads = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const [rows] = await pool.query<any[]>(
-            `SELECT h.head_id, pe.name, pe.email, pe.phone, h.is_active
+            `SELECT h.head_id, pe.name, pe.email, pe.phone, h.is_active, st.staff_id, COALESCE(st.status, CASE WHEN h.is_active THEN 'ACTIVE' ELSE 'INACTIVE' END) as status
              FROM head h
              JOIN person pe ON h.person_id = pe.person_id
-             WHERE h.is_active = TRUE
+             LEFT JOIN staff st ON (pe.email = st.email OR pe.phone = st.phone)
              ORDER BY h.head_id DESC`
         );
         res.json({ status: "success", results: rows.length, data: rows });
@@ -753,10 +762,10 @@ export const listHeads = async (req: Request, res: Response, next: NextFunction)
 export const listSupervisors = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const [rows] = await pool.query<any[]>(
-            `SELECT s.supervisor_id, pe.name, pe.email, pe.phone, s.is_active
+            `SELECT s.supervisor_id, pe.name, pe.email, pe.phone, s.is_active, st.staff_id, COALESCE(st.status, CASE WHEN s.is_active THEN 'ACTIVE' ELSE 'INACTIVE' END) as status
              FROM supervisor s
              JOIN person pe ON s.person_id = pe.person_id
-             WHERE s.is_active = TRUE
+             LEFT JOIN staff st ON (pe.email = st.email OR pe.phone = st.phone)
              ORDER BY s.supervisor_id DESC`
         );
         res.json({ status: "success", results: rows.length, data: rows });
@@ -1104,5 +1113,578 @@ export const assignSupervisorHostel = async (req: Request, res: Response, next: 
         next(error);
     } finally {
         connection.release();
+    }
+};
+
+async function ensureAuditLogTableExists() {
+    try {
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS audit_log (
+                audit_id INT AUTO_INCREMENT PRIMARY KEY,
+                entity_type VARCHAR(50) NOT NULL,
+                entity_id VARCHAR(50) NOT NULL,
+                action VARCHAR(50) NOT NULL,
+                old_values JSON NULL,
+                new_values JSON NULL,
+                performed_by VARCHAR(50) NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+    } catch (err) {
+        console.error("Error ensuring audit_log table exists:", err);
+    }
+}
+
+/**
+ * Audit Logger Helper
+ */
+async function logAudit(
+    entityType: string,
+    entityId: string,
+    action: string,
+    oldValues: any,
+    newValues: any,
+    performedBy: string
+) {
+    try {
+        await ensureAuditLogTableExists();
+        await pool.query(
+            `INSERT INTO audit_log (entity_type, entity_id, action, old_values, new_values, performed_by)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [entityType, entityId, action, JSON.stringify(oldValues), JSON.stringify(newValues), performedBy || "SYSTEM"]
+        );
+    } catch (err) {
+        console.error("Audit log insert error:", err);
+    }
+}
+
+/**
+ * Edit Staff Profile & Active/Inactive Status Toggle
+ */
+export const updateHierarchyStaff = async (req: Request, res: Response, next: NextFunction) => {
+    const connection = await pool.getConnection();
+    try {
+        const staffId = Number(req.params.id);
+        const { name, phone, email, status, password } = req.body;
+        const editorId = (req as any).user?.staff_id || "SYSTEM";
+
+        let [existing] = await connection.query<any[]>(
+            "SELECT staff_id, name, email, phone, role, status FROM staff WHERE staff_id = ?",
+            [staffId]
+        );
+
+        if (existing.length === 0) {
+            const [fallback] = await connection.query<any[]>(
+                `SELECT st.staff_id, st.name, st.email, st.phone, st.role, st.status
+                 FROM staff st
+                 JOIN person pe ON (st.email = pe.email OR (st.phone IS NOT NULL AND st.phone = pe.phone))
+                 WHERE pe.person_id = ?`,
+                [staffId]
+            );
+            if (fallback.length > 0) {
+                existing = fallback;
+            }
+        }
+
+        if (existing.length === 0) {
+            connection.release();
+            return next(new AppError("Staff record not found", 404));
+        }
+
+        const oldStaff = existing[0];
+        const targetStaffId = oldStaff.staff_id;
+        const currentDate = new Date().toISOString().slice(0, 10);
+
+        await connection.beginTransaction();
+
+        // Update Staff Base Record
+        await connection.query(
+            `UPDATE staff
+             SET name = COALESCE(?, name),
+                 email = COALESCE(?, email),
+                 phone = COALESCE(?, phone),
+                 status = COALESCE(?, status)
+             WHERE staff_id = ?`,
+            [name || null, email || null, phone || null, status || null, targetStaffId]
+        );
+
+        if (password) {
+            const passwordHash = await bcrypt.hash(password, 10);
+            await connection.query(
+                "UPDATE staff SET password_hash = ? WHERE staff_id = ?",
+                [passwordHash, targetStaffId]
+            );
+        }
+
+        // Also update Person table if exists
+        await connection.query(
+            `UPDATE person
+             SET name = COALESCE(?, name),
+                 email = COALESCE(?, email),
+                 phone = COALESCE(?, phone),
+                 is_active = CASE WHEN ? = 'INACTIVE' THEN FALSE ELSE TRUE END
+             WHERE email = ? OR phone = ?`,
+            [name || null, email || null, phone || null, status || null, oldStaff.email, oldStaff.phone || null]
+        );
+
+        // If status changed to INACTIVE, close active assignments cleanly
+        if (status && status === "INACTIVE" && oldStaff.status === "ACTIVE") {
+            // Get Person ID
+            const [pRec] = await connection.query<any[]>(
+                "SELECT person_id FROM person WHERE email = ?",
+                [oldStaff.email]
+            );
+            const personId = pRec[0]?.person_id;
+
+            if (oldStaff.role === "SUPERVISOR") {
+                const [sRec] = await connection.query<any[]>("SELECT supervisor_id FROM supervisor WHERE person_id = ?", [personId]);
+                if (sRec.length > 0) {
+                    await connection.query(
+                        "UPDATE hostel_supervisor_assignment SET is_current = FALSE, end_date = ? WHERE supervisor_id = ? AND is_current = TRUE",
+                        [currentDate, sRec[0].supervisor_id]
+                    );
+                }
+            } else if (oldStaff.role === "MANAGER") {
+                const [mRec] = await connection.query<any[]>("SELECT manager_id FROM manager WHERE person_id = ?", [personId]);
+                if (mRec.length > 0) {
+                    await connection.query(
+                        "UPDATE partner_manager_assignment SET is_current = FALSE, end_date = ? WHERE manager_id = ? AND is_current = TRUE",
+                        [currentDate, mRec[0].manager_id]
+                    );
+                    await connection.query(
+                        "UPDATE manager_hostel_assignment SET is_current = FALSE, end_date = ? WHERE manager_id = ? AND is_current = TRUE",
+                        [currentDate, mRec[0].manager_id]
+                    );
+                }
+            } else if (oldStaff.role === "PARTNER") {
+                const [partnerRec] = await connection.query<any[]>("SELECT partner_id FROM partner WHERE person_id = ?", [personId]);
+                if (partnerRec.length > 0) {
+                    await connection.query(
+                        "UPDATE head_partner_assignment SET is_current = FALSE, end_date = ? WHERE partner_id = ? AND is_current = TRUE",
+                        [currentDate, partnerRec[0].partner_id]
+                    );
+                    await connection.query(
+                        "UPDATE partner_hostel_assignment SET is_current = FALSE, end_date = ? WHERE partner_id = ? AND is_current = TRUE",
+                        [currentDate, partnerRec[0].partner_id]
+                    );
+                }
+            }
+
+            await logAudit(
+                "STAFF_PROFILE",
+                String(targetStaffId),
+                "STATUS_TOGGLE",
+                { status: "ACTIVE", role: oldStaff.role },
+                { status: "INACTIVE", role: oldStaff.role },
+                String(editorId)
+            );
+        } else if (status && status === "ACTIVE" && oldStaff.status === "INACTIVE") {
+            await logAudit(
+                "STAFF_PROFILE",
+                String(targetStaffId),
+                "STATUS_TOGGLE",
+                { status: "INACTIVE", role: oldStaff.role },
+                { status: "ACTIVE", role: oldStaff.role },
+                String(editorId)
+            );
+        }
+
+        if (name && name !== oldStaff.name) {
+            await logAudit(
+                "STAFF_PROFILE",
+                String(targetStaffId),
+                "PROFILE_UPDATE",
+                { name: oldStaff.name, phone: oldStaff.phone },
+                { name, phone: phone || oldStaff.phone },
+                String(editorId)
+            );
+        }
+
+        await connection.commit();
+
+        res.json({
+            status: "success",
+            message: "Staff profile updated successfully"
+        });
+    } catch (error) {
+        await connection.rollback();
+        next(error);
+    } finally {
+        connection.release();
+    }
+};
+
+/**
+ * Sequential Step-by-Step Role Elevation (SUPERVISOR -> MANAGER -> PARTNER -> HEAD)
+ */
+export const elevateHierarchyStaffRole = async (req: Request, res: Response, next: NextFunction) => {
+    const connection = await pool.getConnection();
+    try {
+        const staffId = Number(req.params.id);
+        const { targetRole, partner_id, head_id, hostel_id, assignment_role } = req.body;
+        const editorId = (req as any).user?.staff_id || "SYSTEM";
+
+        const [existing] = await connection.query<any[]>(
+            "SELECT staff_id, name, email, phone, role, status FROM staff WHERE staff_id = ?",
+            [staffId]
+        );
+
+        if (existing.length === 0) {
+            connection.release();
+            return next(new AppError("Staff record not found", 404));
+        }
+
+        const staff = existing[0];
+        const currentRole = staff.role;
+        const currentDate = new Date().toISOString().slice(0, 10);
+
+        // Enforce Sequential Tier Path
+        const allowedPromotions: Record<string, string> = {
+            SUPERVISOR: "MANAGER",
+            MANAGER: "PARTNER",
+            PARTNER: "HEAD"
+        };
+
+        if (!allowedPromotions[currentRole] || allowedPromotions[currentRole] !== targetRole) {
+            connection.release();
+            return next(new AppError(
+                `Invalid promotion path. Role promotion must proceed sequentially through adjacent hierarchy tiers (Current: ${currentRole} ➔ Allowed Target: ${allowedPromotions[currentRole] || 'None'}).`,
+                422
+            ));
+        }
+
+        // Fetch Person ID
+        const [pRec] = await connection.query<any[]>(
+            "SELECT person_id FROM person WHERE email = ? OR phone = ?",
+            [staff.email, staff.phone || null]
+        );
+        let personId = pRec[0]?.person_id;
+
+        if (!personId) {
+            const [pRes] = await connection.query<any>(
+                "INSERT INTO person (name, email, phone, is_active) VALUES (?, ?, ?, TRUE)",
+                [staff.name, staff.email, staff.phone || null]
+            );
+            personId = pRes.insertId;
+        }
+
+        await connection.beginTransaction();
+
+        if (currentRole === "SUPERVISOR" && targetRole === "MANAGER") {
+            const targetPartnerId = partner_id ? Number(partner_id) : null;
+            if (!targetPartnerId) {
+                await connection.rollback();
+                connection.release();
+                return next(new AppError("partner_id is required when promoting a Supervisor to Manager", 400));
+            }
+
+            // 1. Deactivate previous supervisor assignment
+            const [sRec] = await connection.query<any[]>("SELECT supervisor_id FROM supervisor WHERE person_id = ?", [personId]);
+            if (sRec.length > 0) {
+                await connection.query(
+                    "UPDATE hostel_supervisor_assignment SET is_current = FALSE, end_date = ? WHERE supervisor_id = ? AND is_current = TRUE",
+                    [currentDate, sRec[0].supervisor_id]
+                );
+            }
+
+            // 2. Create Manager Entity
+            const [mRes] = await connection.query<any>(
+                "INSERT INTO manager (person_id, is_active) VALUES (?, TRUE)",
+                [personId]
+            );
+            const managerId = mRes.insertId;
+
+            // 3. Assign Partner -> Manager
+            await connection.query(
+                "INSERT INTO partner_manager_assignment (partner_id, manager_id, start_date, is_current) VALUES (?, ?, ?, TRUE)",
+                [targetPartnerId, managerId, currentDate]
+            );
+
+            // 4. Update Staff Role
+            await connection.query("UPDATE staff SET role = 'MANAGER' WHERE staff_id = ?", [staffId]);
+
+            // 5. Audit Log
+            await logAudit(
+                "ROLE_BINDING",
+                String(staffId),
+                "ELEVATE",
+                { role: "SUPERVISOR" },
+                { role: "MANAGER", partner_id: targetPartnerId, manager_id: managerId },
+                String(editorId)
+            );
+        } else if (currentRole === "MANAGER" && targetRole === "PARTNER") {
+            const targetHeadId = head_id ? Number(head_id) : 1;
+
+            // 1. Deactivate previous manager assignment
+            const [mRec] = await connection.query<any[]>("SELECT manager_id FROM manager WHERE person_id = ?", [personId]);
+            if (mRec.length > 0) {
+                await connection.query(
+                    "UPDATE partner_manager_assignment SET is_current = FALSE, end_date = ? WHERE manager_id = ? AND is_current = TRUE",
+                    [currentDate, mRec[0].manager_id]
+                );
+                await connection.query(
+                    "UPDATE manager_hostel_assignment SET is_current = FALSE, end_date = ? WHERE manager_id = ? AND is_current = TRUE",
+                    [currentDate, mRec[0].manager_id]
+                );
+            }
+
+            // 2. Create Partner Entity
+            const [pRes] = await connection.query<any>(
+                "INSERT INTO partner (person_id, is_active) VALUES (?, TRUE)",
+                [personId]
+            );
+            const partnerId = pRes.insertId;
+
+            // 3. Assign Head -> Partner
+            await connection.query(
+                "INSERT INTO head_partner_assignment (head_id, partner_id, start_date, is_current) VALUES (?, ?, ?, TRUE)",
+                [targetHeadId, partnerId, currentDate]
+            );
+
+            // 4. Update Staff Role
+            await connection.query("UPDATE staff SET role = 'PARTNER' WHERE staff_id = ?", [staffId]);
+
+            // 5. Audit Log
+            await logAudit(
+                "ROLE_BINDING",
+                String(staffId),
+                "ELEVATE",
+                { role: "MANAGER" },
+                { role: "PARTNER", partner_id: partnerId, head_id: targetHeadId },
+                String(editorId)
+            );
+        } else if (currentRole === "PARTNER" && targetRole === "HEAD") {
+            // 1. Deactivate previous partner assignment
+            const [pRec] = await connection.query<any[]>("SELECT partner_id FROM partner WHERE person_id = ?", [personId]);
+            if (pRec.length > 0) {
+                await connection.query(
+                    "UPDATE head_partner_assignment SET is_current = FALSE, end_date = ? WHERE partner_id = ? AND is_current = TRUE",
+                    [currentDate, pRec[0].partner_id]
+                );
+                await connection.query(
+                    "UPDATE partner_hostel_assignment SET is_current = FALSE, end_date = ? WHERE partner_id = ? AND is_current = TRUE",
+                    [currentDate, pRec[0].partner_id]
+                );
+            }
+
+            // 2. Create Head Entity
+            const [hRes] = await connection.query<any>(
+                "INSERT INTO head (person_id, is_active) VALUES (?, TRUE)",
+                [personId]
+            );
+
+            // 3. Update Staff Role
+            await connection.query("UPDATE staff SET role = 'HEAD' WHERE staff_id = ?", [staffId]);
+
+            // 4. Audit Log
+            await logAudit(
+                "ROLE_BINDING",
+                String(staffId),
+                "ELEVATE",
+                { role: "PARTNER" },
+                { role: "HEAD", head_id: hRes.insertId },
+                String(editorId)
+            );
+        }
+
+        await connection.commit();
+
+        res.json({
+            status: "success",
+            message: `Staff role successfully elevated from ${currentRole} to ${targetRole}`,
+            data: { staff_id: staffId, old_role: currentRole, new_role: targetRole }
+        });
+    } catch (error) {
+        await connection.rollback();
+        next(error);
+    } finally {
+        connection.release();
+    }
+};
+
+/**
+ * Dual-Source Career History Timeline (Assignment Tables + Audit Logs)
+ */
+export const getHierarchyStaffHistory = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const staffId = Number(req.params.id);
+
+        let [staffRows] = await pool.query<any[]>(
+            "SELECT staff_id, name, email, phone, role, status, created_at FROM staff WHERE staff_id = ?",
+            [staffId]
+        );
+
+        if (staffRows.length === 0) {
+            const [fallback] = await pool.query<any[]>(
+                `SELECT st.staff_id, st.name, st.email, st.phone, st.role, st.status, st.created_at
+                 FROM staff st
+                 JOIN person pe ON (st.email = pe.email OR (st.phone IS NOT NULL AND st.phone = pe.phone))
+                 WHERE pe.person_id = ?`,
+                [staffId]
+            );
+            if (fallback.length > 0) {
+                staffRows = fallback;
+            }
+        }
+
+        if (staffRows.length === 0) {
+            return next(new AppError("Staff record not found", 404));
+        }
+
+        const staff = staffRows[0];
+        const targetStaffId = staff.staff_id;
+
+        // Fetch Person ID
+        const [pRec] = await pool.query<any[]>(
+            "SELECT person_id FROM person WHERE email = ? OR (phone IS NOT NULL AND phone = ?)",
+            [staff.email, staff.phone || null]
+        );
+        const personId = pRec[0]?.person_id;
+
+        // Collect Structural Career Assignments across all tiers
+        let assignmentsList: any[] = [];
+        if (personId) {
+            const [hsa] = await pool.query<any[]>(
+                `SELECT 'SUPERVISOR' as tier, hsa.assignment_role, h.name as scope_name, hsa.start_date, hsa.end_date, hsa.is_current
+                 FROM supervisor s
+                 JOIN hostel_supervisor_assignment hsa ON s.supervisor_id = hsa.supervisor_id
+                 JOIN hostel h ON hsa.hostel_id = h.hostel_id
+                 WHERE s.person_id = ?`,
+                [personId]
+            );
+
+            const [mha] = await pool.query<any[]>(
+                `SELECT 'MANAGER' as tier, 'PROPERTY_MANAGER' as assignment_role, h.name as scope_name, mha.start_date, mha.end_date, mha.is_current
+                 FROM manager m
+                 JOIN manager_hostel_assignment mha ON m.manager_id = mha.manager_id
+                 JOIN hostel h ON mha.hostel_id = h.hostel_id
+                 WHERE m.person_id = ?`,
+                [personId]
+            );
+
+            const [pma] = await pool.query<any[]>(
+                `SELECT 'MANAGER' as tier, 'PARTNER_BOUND' as assignment_role, pe.name as scope_name, pma.start_date, pma.end_date, pma.is_current
+                 FROM manager m
+                 JOIN partner_manager_assignment pma ON m.manager_id = pma.manager_id
+                 JOIN partner p ON pma.partner_id = p.partner_id
+                 JOIN person pe ON p.person_id = pe.person_id
+                 WHERE m.person_id = ?`,
+                [personId]
+            );
+
+            const [hpa] = await pool.query<any[]>(
+                `SELECT 'PARTNER' as tier, 'HEAD_BOUND' as assignment_role, pe.name as scope_name, hpa.start_date, hpa.end_date, hpa.is_current
+                 FROM partner p
+                 JOIN head_partner_assignment hpa ON p.partner_id = hpa.partner_id
+                 JOIN head h ON hpa.head_id = h.head_id
+                 JOIN person pe ON h.person_id = pe.person_id
+                 WHERE p.person_id = ?`,
+                [personId]
+            );
+
+            assignmentsList = [...hsa, ...mha, ...pma, ...hpa];
+        }
+
+        // Collect Audit Log Events with safe table creation & query
+        let auditLogs: any[] = [];
+        try {
+            await ensureAuditLogTableExists();
+            const [rows] = await pool.query<any[]>(
+                `SELECT audit_id, entity_type, action, old_values, new_values, performed_by, created_at
+                 FROM audit_log
+                 WHERE entity_id = ? OR entity_id = ?
+                 ORDER BY audit_id DESC`,
+                [String(targetStaffId), String(staffId)]
+            );
+            auditLogs = rows;
+        } catch (auditErr) {
+            console.error("Audit log fetch error:", auditErr);
+            auditLogs = [];
+        }
+
+        res.json({
+            status: "success",
+            data: {
+                staff,
+                careerTimeline: assignmentsList,
+                auditLogs
+            }
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * Resident Stay Details Endpoint (For Resident Portal)
+ */
+export const getResidentStayDetails = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const currentUser = (req as any).user;
+        if (!currentUser) {
+            return next(new AppError("User not authenticated", 401));
+        }
+
+        // Find tenant record by email or phone
+        const [tenants] = await pool.query<any[]>(
+            "SELECT tenant_id, name, email, phone, status FROM tenant WHERE email = ? OR (phone IS NOT NULL AND phone = ?)",
+            [currentUser.email, currentUser.phone || null]
+        );
+
+        if (tenants.length === 0) {
+            return res.json({
+                status: "success",
+                data: {
+                    resident: { name: currentUser.name, email: currentUser.email, phone: currentUser.phone },
+                    stay: null,
+                    maintenance_supervisor: null
+                }
+            });
+        }
+
+        const tenant = tenants[0];
+
+        // Fetch active allocation
+        const [allocations] = await pool.query<any[]>(
+            `SELECT ta.allocation_id, ta.start_date, b.bed_id, b.bed_number, r.room_id, r.room_number, r.room_type, f.floor_id, f.floor_number, f.name as floor_name, h.hostel_id, h.name as hostel_name, h.address as hostel_address
+             FROM tenant_allocation ta
+             JOIN bed b ON ta.bed_id = b.bed_id
+             JOIN room r ON b.room_id = r.room_id
+             JOIN floor f ON r.floor_id = f.floor_id
+             JOIN hostel h ON f.hostel_id = h.hostel_id
+             WHERE ta.tenant_id = ? AND ta.status = 'ACTIVE'
+             LIMIT 1`,
+            [tenant.tenant_id]
+        );
+
+        const stay = allocations[0] || null;
+
+        // Fetch active Maintenance Supervisor for this hostel
+        let maintenanceSupervisor: any = null;
+        if (stay && stay.hostel_id) {
+            const [supervisors] = await pool.query<any[]>(
+                `SELECT s.supervisor_id, pe.name as supervisor_name, pe.email as supervisor_email, pe.phone as supervisor_phone
+                 FROM hostel_supervisor_assignment hsa
+                 JOIN supervisor s ON hsa.supervisor_id = s.supervisor_id
+                 JOIN person pe ON s.person_id = pe.person_id
+                 WHERE hsa.hostel_id = ? AND hsa.assignment_role = 'MAINTENANCE' AND hsa.is_current = TRUE
+                 LIMIT 1`,
+                [stay.hostel_id]
+            );
+            if (supervisors.length > 0) {
+                maintenanceSupervisor = supervisors[0];
+            }
+        }
+
+        res.json({
+            status: "success",
+            data: {
+                resident: tenant,
+                stay,
+                maintenance_supervisor: maintenanceSupervisor
+            }
+        });
+    } catch (error) {
+        next(error);
     }
 };

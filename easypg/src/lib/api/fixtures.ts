@@ -412,6 +412,37 @@ export function createDemoFixtures(role: Role = "manager"): DemoFixtures {
         ],
       },
       "/payments": { invoices },
+      "/visitors": {
+        activeHostel: hostel,
+        visitors: [
+          {
+            id: "demo-visitor-1",
+            visitorName: "Robert Fox",
+            phone: "+91 98765 43210",
+            purpose: "Personal Visit",
+            relation: "Father",
+            residentName: "Aarav Sharma",
+            roomNumber: "101",
+            hostelName: "Greenwood Residency",
+            entryTime: new Date().toISOString(),
+            exitTime: null,
+            status: "IN_HOUSE",
+          },
+        ],
+        metrics: { totalInHouse: 1, totalToday: 1 },
+        residents: [],
+      },
+      "/maintenance": {
+        activeHostel: hostel,
+        complaints: [],
+        metrics: { totalOpen: 0, totalCount: 0 },
+      },
+      "/expenses": {
+        activeHostel: hostel,
+        expenses: [],
+        categories: [{ expense_category_id: "1", category_name: "Utilities" }],
+        totalAmount: 0,
+      },
       "/reports": {
         hostel,
         floorOccupancy: [

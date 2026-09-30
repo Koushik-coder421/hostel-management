@@ -18,6 +18,9 @@
     assignPartnerHostel,
     assignManagerHostel,
     assignSupervisorHostel,
+    updateStaffProfile,
+    elevateStaffRole,
+    fetchStaffHistory,
     type DashboardResponse
   } from '$lib/services/hierarchyService';
 
@@ -58,6 +61,7 @@
   let name = $state('');
   let email = $state('');
   let password = $state('');
+  let showPassword = $state(false);
   let phone = $state('');
   let address = $state('');
   let contactNumber = $state('');
@@ -73,6 +77,94 @@
   let assignmentRole = $state<'TENANT_ADMIN' | 'MAINTENANCE'>('TENANT_ADMIN');
 
   let isSubmitting = $state(false);
+
+  // Staff Edit & Elevation modal states
+  let isStaffEditOpen = $state(false);
+  let isElevateOpen = $state(false);
+  let isHistoryOpen = $state(false);
+  let editingStaff = $state<any>(null);
+  let editStaffName = $state('');
+  let editStaffEmail = $state('');
+  let editStaffPhone = $state('');
+  let editStaffPassword = $state('');
+  let showEditPassword = $state(false);
+  let editStaffStatus = $state<'ACTIVE' | 'INACTIVE'>('ACTIVE');
+  let elevateTargetRole = $state<'MANAGER' | 'PARTNER' | 'HEAD'>('MANAGER');
+  let elevatePartnerId = $state<number | undefined>(undefined);
+  let elevateHeadId = $state<number | undefined>(undefined);
+  let staffHistoryData = $state<any>(null);
+
+  function openStaffEdit(item: any, defaultRole: string) {
+    editingStaff = { ...item, activeRole: item.role || defaultRole };
+    editStaffName = item.name || '';
+    editStaffEmail = item.email || '';
+    editStaffPhone = item.phone || '';
+    editStaffPassword = '';
+    showEditPassword = false;
+    editStaffStatus = item.is_active === false || item.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE';
+    isStaffEditOpen = true;
+  }
+
+  function openStaffElevate(item: any, currentRole: string) {
+    editingStaff = { ...item, currentRole };
+    if (currentRole === 'SUPERVISOR') elevateTargetRole = 'MANAGER';
+    else if (currentRole === 'MANAGER') elevateTargetRole = 'PARTNER';
+    else if (currentRole === 'PARTNER') elevateTargetRole = 'HEAD';
+    isElevateOpen = true;
+  }
+
+  async function openStaffHistory(item: any) {
+    editingStaff = item;
+    const staffId = item.staff_id || item.id || item.supervisor_id || item.manager_id || item.partner_id || item.head_id;
+    try {
+      staffHistoryData = await fetchStaffHistory(staffId);
+      isHistoryOpen = true;
+    } catch (err: any) {
+      errorMsg = err.message || 'Failed to fetch career history';
+    }
+  }
+
+  async function handleSaveStaffEdit() {
+    if (!editingStaff) return;
+    const staffId = editingStaff.staff_id || editingStaff.id || editingStaff.supervisor_id || editingStaff.manager_id || editingStaff.partner_id || editingStaff.head_id;
+    isSubmitting = true;
+    try {
+      await updateStaffProfile(staffId, {
+        name: editStaffName,
+        email: editStaffEmail,
+        phone: editStaffPhone,
+        status: editStaffStatus,
+        password: editStaffPassword ? editStaffPassword : undefined
+      });
+      successMsg = `Updated ${editStaffName} successfully`;
+      isStaffEditOpen = false;
+      await loadData();
+    } catch (err: any) {
+      errorMsg = err.message || 'Update failed';
+    } finally {
+      isSubmitting = false;
+    }
+  }
+
+  async function handleSaveStaffElevate() {
+    if (!editingStaff) return;
+    const staffId = editingStaff.staff_id || editingStaff.id || editingStaff.supervisor_id || editingStaff.manager_id || editingStaff.partner_id || editingStaff.head_id;
+    isSubmitting = true;
+    try {
+      await elevateStaffRole(staffId, {
+        targetRole: elevateTargetRole,
+        partner_id: elevatePartnerId,
+        head_id: elevateHeadId
+      });
+      successMsg = `Elevated ${editingStaff.name} to ${elevateTargetRole} successfully`;
+      isElevateOpen = false;
+      await loadData();
+    } catch (err: any) {
+      errorMsg = err.message || 'Role elevation failed';
+    } finally {
+      isSubmitting = false;
+    }
+  }
 
   onMount(async () => {
     await loadData();
@@ -112,6 +204,7 @@
     name = '';
     email = '';
     password = '';
+    showPassword = false;
     phone = '';
     address = '';
     contactNumber = '';
@@ -279,76 +372,127 @@
       <div class="tables-grid">
         <div>
           <h3>Heads ({heads.length})</h3>
-          <table class="data-table">
-            <thead>
-              <tr><th>Head ID</th><th>Name</th><th>Email</th><th>Phone</th></tr>
-            </thead>
-            <tbody>
-              {#if heads.length === 0}
-                <tr><td colspan="4" class="empty-cell">No Heads registered</td></tr>
-              {:else}
-                {#each heads as h}
-                  <tr><td>{h.head_id}</td><td><strong>{h.name}</strong></td><td>{h.email}</td><td>{h.phone || '-'}</td></tr>
-                {/each}
-              {/if}
-            </tbody>
-          </table>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr><th>Head ID</th><th>Name</th><th>Email</th><th>Phone</th><th>Status</th><th>Actions</th></tr>
+              </thead>
+              <tbody>
+                {#if heads.length === 0}
+                  <tr><td colspan="6" class="empty-cell">No Heads registered</td></tr>
+                {:else}
+                  {#each heads as h}
+                    <tr>
+                      <td>{h.head_id}</td>
+                      <td><strong>{h.name}</strong></td>
+                      <td>{h.email}</td>
+                      <td>{h.phone || '-'}</td>
+                      <td><span class="status-tag {h.is_active !== false && h.status !== 'INACTIVE' ? 'active' : 'inactive'}">{h.is_active !== false && h.status !== 'INACTIVE' ? 'ACTIVE' : 'INACTIVE'}</span></td>
+                      <td style="display: flex; gap: 4px; white-space: nowrap;">
+                        <button class="btn btn-sm btn-ghost" onclick={() => openStaffEdit(h, 'HEAD')}>✏️ Edit</button>
+                        <button class="btn btn-sm btn-ghost" onclick={() => openStaffHistory(h)}>📜 History</button>
+                      </td>
+                    </tr>
+                  {/each}
+                {/if}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <div>
           <h3>Partners ({partners.length})</h3>
-          <table class="data-table">
-            <thead>
-              <tr><th>Partner ID</th><th>Name</th><th>Email</th><th>Phone</th></tr>
-            </thead>
-            <tbody>
-              {#if partners.length === 0}
-                <tr><td colspan="4" class="empty-cell">No Partners registered</td></tr>
-              {:else}
-                {#each partners as p}
-                  <tr><td>{p.partner_id}</td><td><strong>{p.name}</strong></td><td>{p.email}</td><td>{p.phone || '-'}</td></tr>
-                {/each}
-              {/if}
-            </tbody>
-          </table>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr><th>Partner ID</th><th>Name</th><th>Email</th><th>Phone</th><th>Status</th><th>Actions</th></tr>
+              </thead>
+              <tbody>
+                {#if partners.length === 0}
+                  <tr><td colspan="6" class="empty-cell">No Partners registered</td></tr>
+                {:else}
+                  {#each partners as p}
+                    <tr>
+                      <td>{p.partner_id}</td>
+                      <td><strong>{p.name}</strong></td>
+                      <td>{p.email}</td>
+                      <td>{p.phone || '-'}</td>
+                      <td><span class="status-tag {p.is_active !== false && p.status !== 'INACTIVE' ? 'active' : 'inactive'}">{p.is_active !== false && p.status !== 'INACTIVE' ? 'ACTIVE' : 'INACTIVE'}</span></td>
+                      <td style="display: flex; gap: 4px; white-space: nowrap;">
+                        <button class="btn btn-sm btn-ghost" onclick={() => openStaffEdit(p, 'PARTNER')}>✏️ Edit</button>
+                        <button class="btn btn-sm btn-primary" onclick={() => openStaffElevate(p, 'PARTNER')}>🚀 Elevate</button>
+                        <button class="btn btn-sm btn-ghost" onclick={() => openStaffHistory(p)}>📜 History</button>
+                      </td>
+                    </tr>
+                  {/each}
+                {/if}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
       <div class="tables-grid" style="margin-top: 1.5rem;">
         <div>
           <h3>Managers ({managers.length})</h3>
-          <table class="data-table">
-            <thead>
-              <tr><th>Manager ID</th><th>Name</th><th>Email</th><th>Phone</th></tr>
-            </thead>
-            <tbody>
-              {#if managers.length === 0}
-                <tr><td colspan="4" class="empty-cell">No Managers registered</td></tr>
-              {:else}
-                {#each managers as m}
-                  <tr><td>{m.manager_id}</td><td><strong>{m.name}</strong></td><td>{m.email}</td><td>{m.phone || '-'}</td></tr>
-                {/each}
-              {/if}
-            </tbody>
-          </table>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr><th>Manager ID</th><th>Name</th><th>Email</th><th>Phone</th><th>Status</th><th>Actions</th></tr>
+              </thead>
+              <tbody>
+                {#if managers.length === 0}
+                  <tr><td colspan="6" class="empty-cell">No Managers registered</td></tr>
+                {:else}
+                  {#each managers as m}
+                    <tr>
+                      <td>{m.manager_id}</td>
+                      <td><strong>{m.name}</strong></td>
+                      <td>{m.email}</td>
+                      <td>{m.phone || '-'}</td>
+                      <td><span class="status-tag {m.is_active !== false && m.status !== 'INACTIVE' ? 'active' : 'inactive'}">{m.is_active !== false && m.status !== 'INACTIVE' ? 'ACTIVE' : 'INACTIVE'}</span></td>
+                      <td style="display: flex; gap: 4px; white-space: nowrap;">
+                        <button class="btn btn-sm btn-ghost" onclick={() => openStaffEdit(m, 'MANAGER')}>✏️ Edit</button>
+                        <button class="btn btn-sm btn-primary" onclick={() => openStaffElevate(m, 'MANAGER')}>🚀 Elevate</button>
+                        <button class="btn btn-sm btn-ghost" onclick={() => openStaffHistory(m)}>📜 History</button>
+                      </td>
+                    </tr>
+                  {/each}
+                {/if}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <div>
           <h3>Supervisors ({supervisors.length})</h3>
-          <table class="data-table">
-            <thead>
-              <tr><th>Supervisor ID</th><th>Name</th><th>Email</th><th>Phone</th></tr>
-            </thead>
-            <tbody>
-              {#if supervisors.length === 0}
-                <tr><td colspan="4" class="empty-cell">No Supervisors registered</td></tr>
-              {:else}
-                {#each supervisors as s}
-                  <tr><td>{s.supervisor_id}</td><td><strong>{s.name}</strong></td><td>{s.email}</td><td>{s.phone || '-'}</td></tr>
-                {/each}
-              {/if}
-            </tbody>
-          </table>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr><th>Supervisor ID</th><th>Name</th><th>Email</th><th>Phone</th><th>Status</th><th>Actions</th></tr>
+              </thead>
+              <tbody>
+                {#if supervisors.length === 0}
+                  <tr><td colspan="6" class="empty-cell">No Supervisors registered</td></tr>
+                {:else}
+                  {#each supervisors as s}
+                    <tr>
+                      <td>{s.supervisor_id}</td>
+                      <td><strong>{s.name}</strong></td>
+                      <td>{s.email}</td>
+                      <td>{s.phone || '-'}</td>
+                      <td><span class="status-tag {s.is_active !== false && s.status !== 'INACTIVE' ? 'active' : 'inactive'}">{s.is_active !== false && s.status !== 'INACTIVE' ? 'ACTIVE' : 'INACTIVE'}</span></td>
+                      <td style="display: flex; gap: 4px; white-space: nowrap;">
+                        <button class="btn btn-sm btn-ghost" onclick={() => openStaffEdit(s, 'SUPERVISOR')}>✏️ Edit</button>
+                        <button class="btn btn-sm btn-primary" onclick={() => openStaffElevate(s, 'SUPERVISOR')}>🚀 Elevate</button>
+                        <button class="btn btn-sm btn-ghost" onclick={() => openStaffHistory(s)}>📜 History</button>
+                      </td>
+                    </tr>
+                  {/each}
+                {/if}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </section>
@@ -516,6 +660,11 @@
         </h2>
 
         <form onsubmit={handleSubmit}>
+          {#if errorMsg}
+            <div class="alert alert-error" style="margin-bottom: 1rem; color: #dc2626; background: rgba(220, 38, 38, 0.1); padding: 0.75rem; border-radius: 0.375rem; border: 1px solid rgba(220, 38, 38, 0.3);">
+              {errorMsg}
+            </div>
+          {/if}
           {#if activeModal === 'hostel'}
             <div class="form-group">
               <label for="hname">Hostel Name</label>
@@ -665,7 +814,23 @@
 
             <div class="form-group">
               <label for="password">Password</label>
-              <input type="password" id="password" bind:value={password} required placeholder="••••••••" />
+              <div style="position: relative; display: flex; align-items: center;">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  id="password"
+                  bind:value={password}
+                  required
+                  placeholder="••••••••"
+                  style="padding-right: 4.5rem;"
+                />
+                <button
+                  type="button"
+                  onclick={() => (showPassword = !showPassword)}
+                  style="position: absolute; right: 0.5rem; background: transparent; border: none; color: #60a5fa; cursor: pointer; font-size: 0.85rem; padding: 0.25rem 0.5rem; font-weight: 500;"
+                >
+                  {showPassword ? "🙈 Hide" : "👁️ Show"}
+                </button>
+              </div>
             </div>
 
             <div class="form-group">
@@ -739,6 +904,178 @@
       </div>
     </div>
   {/if}
+
+  <!-- Staff Edit Modal -->
+  {#if isStaffEditOpen}
+    <div class="modal-backdrop" onclick={() => (isStaffEditOpen = false)} role="presentation">
+      <div class="modal-content" onclick={(e) => e.stopPropagation()} role="presentation">
+        <h2>✏️ Edit Staff Profile ({editingStaff?.name || ''})</h2>
+        <form onsubmit={(e) => { e.preventDefault(); handleSaveStaffEdit(); }}>
+          <div class="form-group">
+            <label for="editName">Full Name</label>
+            <input type="text" id="editName" bind:value={editStaffName} required />
+          </div>
+          <div class="form-group">
+            <label for="editEmail">Email Address</label>
+            <input type="email" id="editEmail" bind:value={editStaffEmail} required />
+          </div>
+          <div class="form-group">
+            <label for="editPhone">Phone Number</label>
+            <input type="tel" id="editPhone" bind:value={editStaffPhone} />
+          </div>
+          <div class="form-group">
+            <label for="editPassword">New Password (Optional)</label>
+            <div style="position: relative; display: flex; align-items: center;">
+              <input
+                type={showEditPassword ? "text" : "password"}
+                id="editPassword"
+                bind:value={editStaffPassword}
+                placeholder="Leave blank to keep unchanged"
+                style="padding-right: 4.5rem;"
+              />
+              <button
+                type="button"
+                onclick={() => (showEditPassword = !showEditPassword)}
+                style="position: absolute; right: 0.5rem; background: transparent; border: none; color: #60a5fa; cursor: pointer; font-size: 0.85rem; padding: 0.25rem 0.5rem; font-weight: 500;"
+              >
+                {showEditPassword ? "🙈 Hide" : "👁️ Show"}
+              </button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="editStatus">Account Status</label>
+            <select id="editStatus" bind:value={editStaffStatus}>
+              <option value="ACTIVE">ACTIVE</option>
+              <option value="INACTIVE">INACTIVE</option>
+            </select>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick={() => (isStaffEditOpen = false)}>Cancel</button>
+            <button type="submit" class="btn btn-primary" disabled={isSubmitting}>
+              {isSubmitting ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Staff Elevation Modal -->
+  {#if isElevateOpen}
+    <div class="modal-backdrop" onclick={() => (isElevateOpen = false)} role="presentation">
+      <div class="modal-content" onclick={(e) => e.stopPropagation()} role="presentation">
+        <h2>🚀 Role Elevation: {editingStaff?.name}</h2>
+        <p style="color: var(--color-text-secondary, #9ca3af); margin-bottom: 1rem; font-size: 0.9rem;">
+          Promote staff member sequentially from <strong>{editingStaff?.currentRole}</strong> to <strong>{elevateTargetRole}</strong>.
+        </p>
+
+        <form onsubmit={(e) => { e.preventDefault(); handleSaveStaffElevate(); }}>
+          {#if elevateTargetRole === 'MANAGER'}
+            <div class="form-group">
+              <label for="elevatePartner">Select Parent Partner (partner_id)</label>
+              <select id="elevatePartner" bind:value={elevatePartnerId}>
+                <option value={undefined}>-- Select Partner --</option>
+                {#each partners as p}
+                  <option value={p.partner_id}>{p.name} (Partner ID: {p.partner_id})</option>
+                {/each}
+              </select>
+            </div>
+          {:else if elevateTargetRole === 'PARTNER'}
+            <div class="form-group">
+              <label for="elevateHead">Select Parent Head (head_id)</label>
+              <select id="elevateHead" bind:value={elevateHeadId}>
+                <option value={undefined}>-- Select Head --</option>
+                {#each heads as h}
+                  <option value={h.head_id}>{h.name} (Head ID: {h.head_id})</option>
+                {/each}
+              </select>
+            </div>
+          {:else if elevateTargetRole === 'HEAD'}
+            <div class="alert alert-success" style="margin-bottom: 1rem;">
+              Promoting Partner to HEAD level. This will elevate authority to top-level System Head.
+            </div>
+          {/if}
+
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick={() => (isElevateOpen = false)}>Cancel</button>
+            <button type="submit" class="btn btn-primary" disabled={isSubmitting}>
+              {isSubmitting ? 'Elevating...' : 'Confirm Elevation'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Staff Career & Audit History Modal -->
+  {#if isHistoryOpen}
+    <div class="modal-backdrop" onclick={() => (isHistoryOpen = false)} role="presentation">
+      <div class="modal-content modal-large" onclick={(e) => e.stopPropagation()} role="presentation">
+        <h2>📜 Career History & Audit Timeline: {editingStaff?.name || ''}</h2>
+
+        {#if !staffHistoryData}
+          <div class="loading-state">Fetching history timeline...</div>
+        {:else}
+          <div class="history-container">
+            <div class="history-section">
+              <h3>Structural Career Assignments</h3>
+              {#if !staffHistoryData.careerTimeline || staffHistoryData.careerTimeline.length === 0}
+                <p class="empty-text">No prior assignment records found.</p>
+              {:else}
+                <ul class="timeline-list">
+                  {#each staffHistoryData.careerTimeline as item}
+                    <li class="timeline-item">
+                      <div class="timeline-badge {item.is_current ? 'current' : 'past'}">
+                        {item.is_current ? 'ACTIVE' : 'HISTORICAL'}
+                      </div>
+                      <div class="timeline-details">
+                        <strong>{item.tier}</strong> ({item.assignment_role || 'Standard Assignment'})
+                        <div class="timeline-scope">Scope/Entity: {item.scope_name || 'N/A'}</div>
+                        <div class="timeline-dates">
+                          {item.start_date ? new Date(item.start_date).toLocaleDateString() : 'N/A'} 
+                          ➔ 
+                          {item.end_date ? new Date(item.end_date).toLocaleDateString() : 'PRESENT'}
+                        </div>
+                      </div>
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+            </div>
+
+            <div class="history-section">
+              <h3>System Audit Log Events</h3>
+              {#if !staffHistoryData.auditLogs || staffHistoryData.auditLogs.length === 0}
+                <p class="empty-text">No audit logs recorded for this staff member.</p>
+              {:else}
+                <div class="audit-list">
+                  {#each staffHistoryData.auditLogs as log}
+                    <div class="audit-card">
+                      <div class="audit-header">
+                        <span class="audit-action">{log.action}</span>
+                        <span class="audit-time">{log.created_at ? new Date(log.created_at).toLocaleString() : ''}</span>
+                      </div>
+                      <div class="audit-body">
+                        <div><strong>Entity:</strong> {log.entity_type} #{log.entity_id || ''}</div>
+                        <div><strong>Performed By:</strong> {log.performed_by || 'System'}</div>
+                        {#if log.new_values}
+                          <pre class="audit-json">{typeof log.new_values === 'string' ? log.new_values : JSON.stringify(log.new_values, null, 2)}</pre>
+                        {/if}
+                      </div>
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          </div>
+        {/if}
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick={() => (isHistoryOpen = false)}>Close</button>
+        </div>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -763,10 +1100,10 @@
   .title {
     font-size: 2rem;
     margin: 0.2rem 0;
-    color: #111827;
+    color: var(--color-text-primary, inherit);
   }
   .description {
-    color: #6b7280;
+    color: var(--color-text-secondary, #9ca3af);
     margin: 0;
   }
   .header-actions {
@@ -783,6 +1120,15 @@
     font-size: 0.9rem;
     transition: background 0.2s;
   }
+  .btn-sm {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.8rem;
+  }
+  .btn-ghost {
+    background: transparent;
+    color: var(--color-text-primary, inherit);
+    border: 1px solid var(--color-border, #475569);
+  }
   .btn-primary {
     background: #2563eb;
     color: white;
@@ -791,8 +1137,9 @@
     background: #1d4ed8;
   }
   .btn-secondary {
-    background: #e5e7eb;
-    color: #374151;
+    background: var(--color-background-card, #334155);
+    color: var(--color-text-primary, inherit);
+    border: 1px solid var(--color-border, #475569);
   }
   .btn-accent {
     background: #059669;
@@ -805,7 +1152,7 @@
   .btn-outline {
     background: transparent;
     border: 1px solid #2563eb;
-    color: #2563eb;
+    color: #60a5fa;
   }
   .alert {
     padding: 1rem;
@@ -813,20 +1160,23 @@
     margin-bottom: 1rem;
   }
   .alert-success {
-    background: #d1fae5;
-    color: #065f46;
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.3);
   }
   .alert-error {
-    background: #fee2e2;
-    color: #991b1b;
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
   }
   .role-badge-row {
     margin-bottom: 1rem;
   }
   .role-chip {
     display: inline-block;
-    background: #eff6ff;
-    color: #1e40af;
+    background: rgba(37, 99, 235, 0.15);
+    color: #60a5fa;
+    border: 1px solid rgba(37, 99, 235, 0.3);
     padding: 0.4rem 0.8rem;
     border-radius: 12px;
     font-size: 0.9rem;
@@ -838,51 +1188,57 @@
     margin-bottom: 2rem;
   }
   .metric-card {
-    background: white;
-    border: 1px solid #e5e7eb;
+    background: var(--color-background-card, #1e293b);
+    border: 1px solid var(--color-border, #334155);
     border-radius: 8px;
     padding: 1.2rem;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   }
   .metric-label {
     font-size: 0.85rem;
-    color: #6b7280;
+    color: var(--color-text-secondary, #9ca3af);
   }
   .metric-value {
     font-size: 1.8rem;
     font-weight: 700;
-    color: #111827;
+    color: var(--color-text-primary, inherit);
     margin-top: 0.3rem;
   }
   .section-card {
-    background: white;
-    border: 1px solid #e5e7eb;
+    background: var(--color-background-card, #1e293b);
+    border: 1px solid var(--color-border, #334155);
     border-radius: 8px;
     padding: 1.5rem;
     margin-bottom: 2rem;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   }
   .section-card h2 {
     font-size: 1.25rem;
     margin-top: 0;
     margin-bottom: 1rem;
-    color: #111827;
+    color: var(--color-text-primary, inherit);
   }
   .section-card h3 {
     font-size: 1rem;
-    color: #374151;
+    color: var(--color-text-primary, inherit);
     margin-bottom: 0.5rem;
   }
   .tables-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
     gap: 1.5rem;
+  }
+  .table-responsive {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-top: 0.5rem;
   }
   .assignment-block {
     margin-bottom: 1.5rem;
-    border-top: 1px solid #f3f4f6;
+    border-top: 1px solid var(--color-border, #334155);
     padding-top: 1rem;
   }
   .data-table {
@@ -893,29 +1249,40 @@
   .data-table th, .data-table td {
     padding: 0.6rem 0.8rem;
     text-align: left;
-    border-bottom: 1px solid #f3f4f6;
+    border-bottom: 1px solid var(--color-border, #334155);
     font-size: 0.9rem;
+    color: var(--color-text-primary, inherit);
   }
   .data-table th {
-    background: #f9fafb;
-    color: #4b5563;
+    background: var(--color-background-elevated, #0f172a);
+    color: var(--color-text-secondary, #9ca3af);
     font-weight: 600;
   }
   .empty-cell {
     text-align: center;
-    color: #9ca3af;
+    color: var(--color-text-secondary, #9ca3af);
     padding: 1rem;
   }
   .badge {
-    background: #e0e7ff;
-    color: #3730a3;
+    background: rgba(99, 102, 241, 0.15);
+    color: #818cf8;
+    border: 1px solid rgba(99, 102, 241, 0.3);
     padding: 0.2rem 0.5rem;
     border-radius: 4px;
     font-size: 0.8rem;
   }
   .status-tag.active {
-    background: #d1fae5;
-    color: #065f46;
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+  }
+  .status-tag.inactive {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
     padding: 0.2rem 0.5rem;
     border-radius: 4px;
     font-size: 0.8rem;
@@ -923,19 +1290,26 @@
   .modal-backdrop {
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,0.5);
+    background: rgba(0,0,0,0.6);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 1000;
   }
   .modal-content {
-    background: white;
+    background: var(--color-background-card, #1e293b);
+    color: var(--color-text-primary, inherit);
+    border: 1px solid var(--color-border, #334155);
     border-radius: 8px;
     width: 100%;
     max-width: 520px;
+    max-height: 90vh;
+    overflow-y: auto;
     padding: 2rem;
-    box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+    box-shadow: 0 20px 25px -5px rgba(0,0,0,0.3);
+  }
+  .modal-large {
+    max-width: 720px;
   }
   .form-group {
     margin-bottom: 1.2rem;
@@ -945,12 +1319,14 @@
     margin-bottom: 0.4rem;
     font-weight: 500;
     font-size: 0.9rem;
-    color: #374151;
+    color: var(--color-text-primary, inherit);
   }
   .form-group input, .form-group select {
     width: 100%;
     padding: 0.6rem;
-    border: 1px solid #d1d5db;
+    background: var(--color-background-elevated, #0f172a);
+    color: var(--color-text-primary, inherit);
+    border: 1px solid var(--color-border, #475569);
     border-radius: 6px;
     font-size: 0.95rem;
     box-sizing: border-box;
@@ -960,5 +1336,102 @@
     justify-content: flex-end;
     gap: 0.8rem;
     margin-top: 1.5rem;
+  }
+  .history-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin-top: 1rem;
+  }
+  .history-section h3 {
+    font-size: 1rem;
+    margin-bottom: 0.75rem;
+    color: var(--color-text-primary, inherit);
+    border-bottom: 1px solid var(--color-border, #334155);
+    padding-bottom: 0.4rem;
+  }
+  .timeline-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .timeline-item {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    padding: 0.75rem;
+    border: 1px solid var(--color-border, #334155);
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+    background: var(--color-background-elevated, #0f172a);
+  }
+  .timeline-badge {
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .timeline-badge.current {
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+  }
+  .timeline-badge.past {
+    background: rgba(156, 163, 175, 0.2);
+    color: #9ca3af;
+  }
+  .timeline-details {
+    font-size: 0.85rem;
+  }
+  .timeline-scope {
+    color: var(--color-text-secondary, #9ca3af);
+    margin-top: 0.2rem;
+  }
+  .timeline-dates {
+    font-size: 0.8rem;
+    color: #60a5fa;
+    margin-top: 0.2rem;
+  }
+  .audit-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .audit-card {
+    border: 1px solid var(--color-border, #334155);
+    border-radius: 6px;
+    padding: 0.75rem;
+    background: var(--color-background-elevated, #0f172a);
+  }
+  .audit-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.4rem;
+    font-size: 0.85rem;
+  }
+  .audit-action {
+    font-weight: 600;
+    color: #818cf8;
+  }
+  .audit-time {
+    color: var(--color-text-secondary, #9ca3af);
+    font-size: 0.8rem;
+  }
+  .audit-body {
+    font-size: 0.8rem;
+    color: var(--color-text-secondary, #9ca3af);
+  }
+  .audit-json {
+    background: rgba(0,0,0,0.3);
+    padding: 0.4rem;
+    border-radius: 4px;
+    overflow-x: auto;
+    font-size: 0.75rem;
+    margin-top: 0.4rem;
+    color: #cbd5e1;
+  }
+  .empty-text {
+    font-size: 0.85rem;
+    color: var(--color-text-secondary, #9ca3af);
+    font-style: italic;
   }
 </style>

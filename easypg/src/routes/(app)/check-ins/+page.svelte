@@ -42,6 +42,8 @@
     return `${values.year}-${values.month}-${values.day}`;
   }
   let checkInDate = $state(todayInAppTimezone());
+  let password = $state('resident123');
+  let showPassword = $state(false);
   let isSubmitting = $state(false);
 
   let filteredBeds = $derived(
@@ -165,7 +167,29 @@
           placeholder="e.g. rahul@example.com"
           value={email}
           onChange={(value: string) => (email = value)}
+          isRequired
         />
+        <div style="display: flex; flex-direction: column; gap: 0.375rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label for="resPassword" style="font-size: 0.8125rem; font-weight: 600; color: #cbd5e1;">Resident Password (for Login)</label>
+            <button
+              type="button"
+              style="background: transparent; border: none; color: #38bdf8; font-size: 0.75rem; cursor: pointer; padding: 0;"
+              onclick={() => (showPassword = !showPassword)}
+            >
+              {showPassword ? '🔒 Hide Password' : '👁️ Show Password'}
+            </button>
+          </div>
+          <TextInput
+            label="Resident Password (for Login)"
+            isLabelHidden
+            type={showPassword ? 'text' : 'password'}
+            htmlName="password"
+            placeholder="Set login password (default: resident123)"
+            value={password}
+            onChange={(val: string) => (password = val)}
+          />
+        </div>
         <Selector
           label="Gender"
           options={genderOptions}

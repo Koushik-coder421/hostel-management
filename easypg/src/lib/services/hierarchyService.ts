@@ -1,3 +1,7 @@
+import { apiFetch, ApiError } from "$lib/api/http";
+
+export { ApiError };
+
 export interface HierarchyUser {
   name: string;
   email: string;
@@ -37,144 +41,62 @@ export interface DashboardResponse {
   hostels?: any[];
 }
 
-function getAuthHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    "Accept": "application/json"
-  };
-  if (typeof localStorage !== "undefined") {
-    const token = localStorage.getItem("token");
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-  }
-  return headers;
-}
-
-const BASE_URL = "http://localhost:5000/api";
-
 export async function createHead(data: HierarchyUser) {
-  const response = await fetch(`${BASE_URL}/hierarchy/head`, {
+  return apiFetch("/hierarchy/head", {
     method: "POST",
-    headers: getAuthHeaders(),
     body: JSON.stringify(data)
   });
-  const json = await response.json();
-  if (!response.ok) {
-    throw new Error(json.message || "Failed to create Head");
-  }
-  return json;
 }
 
 export async function createPartner(data: HierarchyUser) {
-  const response = await fetch(`${BASE_URL}/hierarchy/partner`, {
+  return apiFetch("/hierarchy/partner", {
     method: "POST",
-    headers: getAuthHeaders(),
     body: JSON.stringify(data)
   });
-  const json = await response.json();
-  if (!response.ok) {
-    throw new Error(json.message || "Failed to create Partner");
-  }
-  return json;
 }
 
 export async function createManager(data: HierarchyUser) {
-  const response = await fetch(`${BASE_URL}/hierarchy/manager`, {
+  return apiFetch("/hierarchy/manager", {
     method: "POST",
-    headers: getAuthHeaders(),
     body: JSON.stringify(data)
   });
-  const json = await response.json();
-  if (!response.ok) {
-    throw new Error(json.message || "Failed to create Manager");
-  }
-  return json;
 }
 
 export async function createSupervisor(data: HierarchyUser) {
-  const response = await fetch(`${BASE_URL}/hierarchy/supervisor`, {
+  return apiFetch("/hierarchy/supervisor", {
     method: "POST",
-    headers: getAuthHeaders(),
     body: JSON.stringify(data)
   });
-  const json = await response.json();
-  if (!response.ok) {
-    throw new Error(json.message || "Failed to create Supervisor");
-  }
-  return json;
 }
 
 export async function fetchRoleDashboard(): Promise<DashboardResponse> {
-  const response = await fetch(`${BASE_URL}/hierarchy/dashboard`, {
-    method: "GET",
-    headers: getAuthHeaders()
-  });
-  const json = await response.json();
-  if (!response.ok) {
-    throw new Error(json.message || "Failed to fetch dashboard data");
-  }
+  const json = await apiFetch<any>("/hierarchy/dashboard");
   return json.data || json;
 }
 
 export async function fetchPartners() {
-  const response = await fetch(`${BASE_URL}/hierarchy/partners`, {
-    method: "GET",
-    headers: getAuthHeaders()
-  });
-  const json = await response.json();
-  if (!response.ok) {
-    throw new Error(json.message || "Failed to fetch partners");
-  }
+  const json = await apiFetch<any>("/hierarchy/partners");
   return json.data || [];
 }
 
 export async function fetchManagers(partnerId?: number) {
-  const url = partnerId ? `${BASE_URL}/hierarchy/managers?partner_id=${partnerId}` : `${BASE_URL}/hierarchy/managers`;
-  const response = await fetch(url, {
-    method: "GET",
-    headers: getAuthHeaders()
-  });
-  const json = await response.json();
-  if (!response.ok) {
-    throw new Error(json.message || "Failed to fetch managers");
-  }
+  const endpoint = partnerId ? `/hierarchy/managers?partner_id=${partnerId}` : "/hierarchy/managers";
+  const json = await apiFetch<any>(endpoint);
   return json.data || [];
 }
 
 export async function fetchHeads() {
-  const response = await fetch(`${BASE_URL}/hierarchy/heads`, {
-    method: "GET",
-    headers: getAuthHeaders()
-  });
-  const json = await response.json();
-  if (!response.ok) {
-    throw new Error(json.message || "Failed to fetch heads");
-  }
+  const json = await apiFetch<any>("/hierarchy/heads");
   return json.data || [];
 }
 
 export async function fetchSupervisors() {
-  const response = await fetch(`${BASE_URL}/hierarchy/supervisors`, {
-    method: "GET",
-    headers: getAuthHeaders()
-  });
-  const json = await response.json();
-  if (!response.ok) {
-    throw new Error(json.message || "Failed to fetch supervisors");
-  }
+  const json = await apiFetch<any>("/hierarchy/supervisors");
   return json.data || [];
 }
 
 export async function fetchAssignments() {
-  const response = await fetch(`${BASE_URL}/hierarchy/assignments`, {
-    method: "GET",
-    headers: getAuthHeaders()
-  });
-  const json = await response.json();
-  if (!response.ok) {
-    throw new Error(json.message || "Failed to fetch assignments");
-  }
+  const json = await apiFetch<any>("/hierarchy/assignments");
   return json.data || {
     head_partner: [],
     partner_manager: [],
@@ -185,91 +107,67 @@ export async function fetchAssignments() {
 }
 
 export async function fetchHostels() {
-  const response = await fetch(`${BASE_URL}/hostels`, {
-    method: "GET",
-    headers: getAuthHeaders()
-  });
-  const json = await response.json();
-  if (!response.ok) {
-    throw new Error(json.message || "Failed to fetch hostels");
-  }
+  const json = await apiFetch<any>("/hostels");
   return json.data || json || [];
 }
 
 export async function createHostel(data: { name: string; address?: string; contact_number?: string; hostel_code?: string; partner_id?: number }) {
-  const response = await fetch(`${BASE_URL}/hostels`, {
+  return apiFetch("/hostels", {
     method: "POST",
-    headers: getAuthHeaders(),
     body: JSON.stringify(data)
   });
-  const json = await response.json();
-  if (!response.ok) {
-    throw new Error(json.message || "Failed to create hostel");
-  }
-  return json;
 }
 
 export async function assignHeadPartner(payload: { head_id: number; partner_id: number }) {
-  const response = await fetch(`${BASE_URL}/hierarchy/assign/head-partner`, {
+  return apiFetch("/hierarchy/assign/head-partner", {
     method: "POST",
-    headers: getAuthHeaders(),
     body: JSON.stringify(payload)
   });
-  const json = await response.json();
-  if (!response.ok) {
-    throw new Error(json.message || "Failed to assign Head to Partner");
-  }
-  return json;
 }
 
 export async function assignPartnerManager(payload: { partner_id: number; manager_id: number }) {
-  const response = await fetch(`${BASE_URL}/hierarchy/assign/partner-manager`, {
+  return apiFetch("/hierarchy/assign/partner-manager", {
     method: "POST",
-    headers: getAuthHeaders(),
     body: JSON.stringify(payload)
   });
-  const json = await response.json();
-  if (!response.ok) {
-    throw new Error(json.message || "Failed to assign Partner to Manager");
-  }
-  return json;
 }
 
 export async function assignPartnerHostel(payload: { partner_id: number; hostel_id: number }) {
-  const response = await fetch(`${BASE_URL}/hierarchy/assign/partner-hostel`, {
+  return apiFetch("/hierarchy/assign/partner-hostel", {
     method: "POST",
-    headers: getAuthHeaders(),
     body: JSON.stringify(payload)
   });
-  const json = await response.json();
-  if (!response.ok) {
-    throw new Error(json.message || "Failed to assign Partner to Hostel");
-  }
-  return json;
 }
 
 export async function assignManagerHostel(payload: { manager_id: number; hostel_id: number }) {
-  const response = await fetch(`${BASE_URL}/hierarchy/assign/manager-hostel`, {
+  return apiFetch("/hierarchy/assign/manager-hostel", {
     method: "POST",
-    headers: getAuthHeaders(),
     body: JSON.stringify(payload)
   });
-  const json = await response.json();
-  if (!response.ok) {
-    throw new Error(json.message || "Failed to assign Manager to Hostel");
-  }
-  return json;
 }
 
 export async function assignSupervisorHostel(payload: { supervisor_id: number; hostel_id: number; assignment_role: "TENANT_ADMIN" | "MAINTENANCE" }) {
-  const response = await fetch(`${BASE_URL}/hierarchy/assign/supervisor-hostel`, {
+  return apiFetch("/hierarchy/assign/supervisor-hostel", {
     method: "POST",
-    headers: getAuthHeaders(),
     body: JSON.stringify(payload)
   });
-  const json = await response.json();
-  if (!response.ok) {
-    throw new Error(json.message || "Failed to assign Supervisor to Hostel");
-  }
-  return json;
+}
+
+export async function updateStaffProfile(staffId: number, payload: { name?: string; email?: string; phone?: string; status?: "ACTIVE" | "INACTIVE"; password?: string }) {
+  return apiFetch(`/hierarchy/staff/${staffId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function elevateStaffRole(staffId: number, payload: { targetRole: "MANAGER" | "PARTNER" | "HEAD"; partner_id?: number; head_id?: number }) {
+  return apiFetch(`/hierarchy/staff/${staffId}/elevate`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function fetchStaffHistory(staffId: number) {
+  const json = await apiFetch<any>(`/hierarchy/staff/${staffId}/history`);
+  return json.data || json;
 }

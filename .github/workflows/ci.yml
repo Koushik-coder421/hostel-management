@@ -1,0 +1,55 @@
+name: CI - Continuous Integration
+
+on:
+  push:
+    branches: [ main, master, dev, "feat/*" ]
+  pull_request:
+    branches: [ main, master, dev ]
+
+jobs:
+  build-and-verify:
+    name: Build & Verification Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 11.25.0
+
+      - name: Install Backend Dependencies
+        run: |
+          cd backend
+          npm ci || npm install
+
+      - name: Verify Backend TypeScript
+        run: |
+          cd backend
+          npx tsc --noEmit
+
+      - name: Build Backend
+        run: |
+          cd backend
+          npm run build
+
+      - name: Install Frontend Dependencies
+        working-directory: easypg
+        run: pnpm install --frozen-lockfile
+        
+      - name: Verify Frontend Svelte Diagnostics
+        run: |
+          cd easypg
+          npx svelte-check --tsconfig ./tsconfig.json
+
+      - name: Build Frontend Application
+        run: |
+          cd easypg
+          pnpm build

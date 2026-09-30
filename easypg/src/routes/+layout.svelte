@@ -8,6 +8,7 @@
   import { neutralTheme } from '@astryx-svelte/theme-neutral';
   import { appearance } from '$lib/design/appearance.svelte';
   import favicon from '$lib/assets/favicon.svg';
+  import { pointGrab } from '@point-grab/svelte';
 
   let { children } = $props();
   if (import.meta.env.DEV) {
@@ -31,18 +32,20 @@
       href="/virtual:stylex.css"
     />{/if}</svelte:head
 >
-<Theme theme={neutralTheme} mode={appearance.mode}>
-  <section aria-live="polite" aria-busy={Boolean(navigating.to)} aria-label="Workspace connection status">
-  {#if config.mode === 'demo'}
-    <Banner status="info" title="Demo mode" description={navigating.to ? 'Loading workspace…' : 'Synthetic sample data. Changes stay in this browser session and are not saved to a server.'} />
-  {:else}
-    <Banner status="info" title="Connected workspace" description={navigating.to ? 'Loading workspace…' : 'Live mode uses your configured EasyPG API.'} />
-  {/if}
-  </section>
-  {#if $feedback?.error || ($feedback?.message && !$feedback?.success)}
-    <section aria-live="assertive" aria-label="Request feedback">
-      <Banner status="error" title="Request could not be completed" description={$feedback.error || $feedback.message || ''} />
+<div use:pointGrab={{ activationMode: 'hold', showToolbar: true, devOnly: false }}>
+  <Theme theme={neutralTheme} mode={appearance.mode}>
+    <section aria-live="polite" aria-busy={Boolean(navigating.to)} aria-label="Workspace connection status">
+    {#if config.mode === 'demo'}
+      <Banner status="info" title="Demo mode" description={navigating.to ? 'Loading workspace…' : 'Synthetic sample data. Changes stay in this browser session and are not saved to a server.'} />
+    {:else}
+      <Banner status="info" title="Connected workspace" description={navigating.to ? 'Loading workspace…' : 'Live mode uses your configured EasyPG API.'} />
+    {/if}
     </section>
-  {/if}
-  {@render children()}
-</Theme>
+    {#if $feedback?.error || ($feedback?.message && !$feedback?.success)}
+      <section aria-live="assertive" aria-label="Request feedback">
+        <Banner status="error" title="Request could not be completed" description={$feedback.error || $feedback.message || ''} />
+      </section>
+    {/if}
+    {@render children()}
+  </Theme>
+</div>

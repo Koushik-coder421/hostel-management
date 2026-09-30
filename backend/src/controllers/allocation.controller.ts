@@ -217,6 +217,21 @@ export const checkoutTenant = async (req: Request, res: Response, next: NextFunc
             return next(new AppError("Checkout end_date cannot be earlier than start_date", 400));
         }
 
+        // Outstanding Dues Guard
+        const [payments] = await connection.query<any[]>(
+            `SELECT COALESCE(SUM(amount), 0) as total_paid
+             FROM payment
+             WHERE (tenant_id = ? OR allocation_id = ?) AND status = 'SUCCESS'`,
+            [allocation.tenant_id, allocationId]
+        );
+        const totalPaid = Number(payments[0].total_paid || 0);
+        const agreedRent = allocation.rent_amount ? Number(allocation.rent_amount) : 8000;
+        const outstandingDues = Math.max(0, agreedRent - totalPaid);
+
+        if (outstandingDues > 0) {
+            return next(new AppError(`Cannot check out resident: Outstanding dues of ₹${outstandingDues} must be settled before checkout.`, 400));
+        }
+
         // Get room details
         const [beds] = await connection.query<any[]>(
             "SELECT room_id FROM bed WHERE bed_id = ?",

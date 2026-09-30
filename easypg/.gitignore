@@ -7,3 +7,9 @@ build/
 test-results/
 playwright-report/
 .DS_Store
+
+# ScopeMap artifacts & cache
+.scopemap-cache/
+scopemap-report.html
+scopemap-findings.json
+impact-report.html

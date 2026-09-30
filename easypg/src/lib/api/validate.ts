@@ -16,7 +16,7 @@ const checks = Object.fromEntries(
 const sessionCheck = ajv.compile(schemas.AppData);
 export function validatePage(route: keyof PageDataMap, value: unknown): void {
   const check = checks[route];
-  if (!check?.(value))
+  if (check && !check(value))
     throw new ApiError(
       "The API response does not match this screen’s documented contract",
       502,

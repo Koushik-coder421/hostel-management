@@ -84,16 +84,37 @@ export const createComplaint = async (req: Request, res: Response, next: NextFun
         const [tenant] = await pool.query<any[]>("SELECT tenant_id FROM tenant WHERE tenant_id = ?", [tenant_id]);
         if (tenant.length === 0) return next(new AppError("Tenant not found", 404));
 
-        // Verify target entity
+        let hostelId: number | null = null;
         if (target_type === "ROOM") {
-            const [t] = await pool.query<any[]>("SELECT room_id FROM room WHERE room_id = ?", [target_id]);
+            const [t] = await pool.query<any[]>("SELECT f.hostel_id FROM room r JOIN floor f ON r.floor_id = f.floor_id WHERE r.room_id = ?", [target_id]);
             if (t.length === 0) return next(new AppError("Room target not found", 404));
+            hostelId = t[0].hostel_id;
         } else if (target_type === "BED") {
-            const [t] = await pool.query<any[]>("SELECT bed_id FROM bed WHERE bed_id = ?", [target_id]);
+            const [t] = await pool.query<any[]>("SELECT f.hostel_id FROM bed b JOIN room r ON b.room_id = r.room_id JOIN floor f ON r.floor_id = f.floor_id WHERE b.bed_id = ?", [target_id]);
             if (t.length === 0) return next(new AppError("Bed target not found", 404));
+            hostelId = t[0].hostel_id;
         } else if (target_type === "FACILITY") {
-            const [t] = await pool.query<any[]>("SELECT facility_id FROM facility WHERE facility_id = ?", [target_id]);
+            const [t] = await pool.query<any[]>("SELECT hostel_id FROM facility WHERE facility_id = ?", [target_id]);
             if (t.length === 0) return next(new AppError("Facility target not found", 404));
+            hostelId = t[0].hostel_id;
+        }
+
+        // Auto-route to assigned Maintenance Supervisor for this hostel
+        let assignedSupervisor: any = null;
+        if (hostelId) {
+            const [supervisors] = await pool.query<any[]>(
+                `SELECT s.supervisor_id, pe.name as supervisor_name, pe.email as supervisor_email, pe.phone as supervisor_phone, st.staff_id
+                 FROM hostel_supervisor_assignment hsa
+                 JOIN supervisor s ON hsa.supervisor_id = s.supervisor_id
+                 JOIN person pe ON s.person_id = pe.person_id
+                 LEFT JOIN staff st ON (pe.email = st.email OR pe.phone = st.phone)
+                 WHERE hsa.hostel_id = ? AND hsa.assignment_role = 'MAINTENANCE' AND hsa.is_current = TRUE
+                 LIMIT 1`,
+                [hostelId]
+            );
+            if (supervisors.length > 0) {
+                assignedSupervisor = supervisors[0];
+            }
         }
 
         const [result] = await pool.query<any>(
@@ -102,17 +123,29 @@ export const createComplaint = async (req: Request, res: Response, next: NextFun
             [tenant_id, target_type, target_id, description, priority]
         );
 
+        const complaintId = result.insertId;
+
+        // Auto-create maintenance request assigned to Maintenance Supervisor
+        if (assignedSupervisor && assignedSupervisor.staff_id) {
+            await pool.query(
+                `INSERT INTO maintenance_request (complaint_id, raised_by, assigned_to, description, priority, status, assigned_at)
+                 VALUES (?, ?, ?, ?, COALESCE(?, 'MEDIUM'), 'ASSIGNED', NOW())`,
+                [complaintId, assignedSupervisor.staff_id, assignedSupervisor.staff_id, description, priority]
+            );
+        }
+
         res.status(201).json({
             status: "success",
-            message: "Maintenance complaint submitted successfully",
+            message: "Maintenance complaint submitted successfully and routed to Maintenance Supervisor",
             data: {
-                complaint_id: result.insertId,
+                complaint_id: complaintId,
                 tenant_id,
                 target_type,
                 target_id,
                 description,
                 priority: priority || "MEDIUM",
-                status: "OPEN"
+                status: "OPEN",
+                assigned_supervisor: assignedSupervisor ? assignedSupervisor.supervisor_name : "Unassigned"
             }
         });
     } catch (error) {

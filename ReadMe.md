@@ -1,587 +1,139 @@
-Hostel Management System
+# Hostel Management System
 
-A full-stack Hostel Management System for managing hostel organizations, staff hierarchy, hostels, rooms, beds, tenants, allocations, rent, payments, maintenance, expenses, visitors, facilities, and reports.
+A full-stack enterprise web application for modern hostel operations, organization hierarchy management, tenant allocation, financial accounting, maintenance ticket tracking, and visitor logging.
 
-Technology Stack
+---
 
-Backend
+## Tech Stack
 
-Node.js
+### Frontend (`easypg/`)
+- **Framework**: SvelteKit 2 + Svelte 5 (Runes architecture)
+- **Language**: TypeScript
+- **UI Components**: Astryx Svelte Core (`@astryx-svelte/core`)
+- **Styling**: StyleX & CSS Modules
+- **Icons**: Lucide Icons (`@lucide/svelte`)
+- **Build Tool**: Vite
 
-Express.js
+### Backend (`backend/`)
+- **Runtime**: Node.js & Express.js
+- **Language**: TypeScript (`tsc`, `tsx`)
+- **Database**: MySQL 8.0 (`mysql2/promise`)
+- **Security**: JWT authentication, `bcryptjs` hashing, role-based scope resolution
 
-TypeScript
+---
 
-MySQL
+## Repository Structure
 
-mysql2/promise
-
-JWT/session-based authentication
-
-bcrypt password hashing
-
-Frontend
-
-Svelte 5
-
-SvelteKit 2
-
-TypeScript
-
-Vite
-
-Astryx Svelte UI
-
-StyleX
-
-Lucide icons
-
-Project Structure
-
+```
 hostel-management/
-├── backend/                 # Node.js + Express + TypeScript API
+├── backend/                   # RESTful API (Express + TypeScript + MySQL)
 │   ├── src/
-│   │   ├── config/
-│   │   ├── controllers/
-│   │   ├── middleware/
-│   │   ├── models/
-│   │   ├── routes/
-│   │   ├── services/
-│   │   ├── tests/
-│   │   └── scratch/
+│   │   ├── config/            # DB configuration & environment variables
+│   │   ├── controllers/       # Business logic handlers
+│   │   ├── middleware/        # JWT auth & error handling
+│   │   ├── routes/            # API endpoints
+│   │   ├── utils/             # Scope & helper utilities
+│   │   └── database/          # SQL schema & seed scripts
 │   ├── package.json
 │   └── tsconfig.json
 │
-├── easypg/                  # SvelteKit frontend
+├── easypg/                    # Modern SvelteKit Frontend
 │   ├── src/
-│   ├── static/
+│   │   ├── lib/               # Shared components, API client, services & stores
+│   │   └── routes/            # SvelteKit app routes & presentation pages
 │   ├── package.json
-│   └── vite.config.*
+│   └── vite.config.ts
 │
-├── database/                # SQL/schema/reset scripts if present
-└── README.md
+└── .github/
+    └── workflows/             # CI Action workflows
+```
 
-The exact folder contents can evolve as the project grows. The backend README documents the API side in more detail.
+---
 
-1. System Architecture
+## Architecture & System Capabilities
 
-The application follows a frontend/backend separation.
+1. **Multi-Tenant Organization Hierarchy**:
+   - Hierarchy levels: System Admin ➔ Organization Head ➔ Business Partner ➔ Property Manager ➔ Property Supervisor.
+   - Dual Supervisor Responsibilities: `TENANT_ADMIN` (Resident management) vs `MAINTENANCE` (Repair operations).
 
-┌──────────────────────────┐
-│      Svelte Frontend     │
-│      SvelteKit + TS      │
-└────────────┬─────────────┘
-             │ HTTP/JSON
-             │ Bearer token
-             ▼
-┌──────────────────────────┐
-│     Express Backend      │
-│       Node + TS          │
-├──────────────────────────┤
-│ Routes                   │
-│ Middleware               │
-│ Controllers              │
-│ Scope / Authorization    │
-│ Business Logic           │
-│ Models / DB access       │
-└────────────┬─────────────┘
-             │
-             ▼
-┌──────────────────────────┐
-│          MySQL           │
-└──────────────────────────┘
+2. **Property Layout & Physical Inventory**:
+   - Structured mapping: Hostel ➔ Floor ➔ Room ➔ Bed.
+   - Dynamic room capacity checking and bed operational status (`AVAILABLE`, `OCCUPIED`, `MAINTENANCE`).
 
-Responsibilities
+3. **Tenant Lifecycle & Stay Allocations**:
+   - Resident profile creation and document storage.
+   - Separate Check-In flow allocating residents to specific beds (`tenant_allocation`).
+   - Bed transfer with historical tracking and Check-Out dues enforcement.
 
-Frontend
+4. **Financial Operations & Invoicing**:
+   - Rent structures, payment recording (Cash, UPI, Card, Bank Transfer).
+   - Automated receipt issuance for confirmed payments.
+   - Operational expense tracking across 8 default categories (Plumbing, Electrical, HVAC, Furniture, Cleaning, Utilities, General, Networking).
 
-UI and navigation
+5. **Maintenance & Visitor Operations**:
+   - Resident complaint filing, ticket priority assignment, and work order updates.
+   - Visitor log registration and check-in/check-out tracking.
+   - Hostel facility allocation and active status management.
 
-Forms
+---
 
-Loading/error/empty states
+## Quick Start Guide
 
-API communication
+### Prerequisites
+- **Node.js**: v18.0.0 or higher
+- **pnpm**: v8.0.0 or higher
+- **MySQL**: v8.0 or higher
 
-Displaying backend data
+### 1. Backend Setup
 
-Role-specific navigation
+```bash
+cd backend
 
-Backend
-
-Authentication
-
-Authorization
-
-Validation
-
-Business rules
-
-Hostel/tenant scope
-
-Transactions
-
-Database operations
-
-API responses
-
-Database
-
-Persistent system data
-
-Organization relationships
-
-Hostel structure
-
-Tenant history
-
-Financial records
-
-Maintenance history
-
-The backend is authoritative for security and business rules. Frontend visibility is not treated as a security boundary.
-
-2. Organization Hierarchy
-
-The system does not use one simple linear hierarchy. Relationships are stored separately.
-
-System Admin
-    │
-    └── Head
-          │
-          ├── Partner
-          │     ├── Manager
-          │     └── Hostel
-          │            └── Supervisor
-          │
-          └── Partner
-                ├── Manager
-                └── Hostel
-
-Important relationships:
-
-Head ↔ Partner
-Partner ↔ Manager
-Partner ↔ Hostel
-Manager ↔ Hostel
-Hostel ↔ Supervisor
-
-Supervisor responsibility is separated into:
-
-TENANT_ADMIN
-
-MAINTENANCE
-
-A hostel can have one active supervisor for each responsibility.
-
-3. Roles
-
-The system supports role-based access including:
-
-SUPERADMIN
-
-ADMIN
-
-HEAD
-
-PARTNER
-
-MANAGER
-
-SUPERVISOR
-
-The supervisor responsibility determines additional permissions:
-
-TENANT_ADMIN
-    → tenant-related operations
-
-MAINTENANCE
-    → maintenance-related operations
-
-The exact permission scope is enforced by the backend.
-
-4. Major Modules
-
-Authentication
-
-Login
-
-Session/profile retrieval
-
-Logout
-
-Bearer-token authentication
-
-Password hashing
-
-Organization Management
-
-Head creation
-
-Partner creation
-
-Manager creation
-
-Supervisor creation
-
-Hostel creation
-
-Organization assignments
-
-Hostel Structure
-
-Hostel
-  └── Floor
-       └── Room
-            └── Bed
-
-Room capacity is enforced by the backend.
-
-Tenant Management
-
-Tenant profiles
-
-Documents
-
-Emergency contacts
-
-Preferences
-
-Stay history
-
-Tenant creation does not automatically create an active allocation.
-
-Allocation
-
-Check-in
-
-Bed allocation
-
-Bed transfer
-
-Check-out
-
-Historical allocations
-
-The system prevents active double allocation.
-
-Rent & Payments
-
-Rent structures
-
-Rent records
-
-Payments
-
-Outstanding balances
-
-Receipts
-
-Receipts are generated only for successful payments.
-
-Maintenance
-
-Maintenance targets
-
-Complaints
-
-Requests
-
-Assignments
-
-Updates/history
-
-Corrective/preventive maintenance
-
-Expenses
-
-Expense categories
-
-Hostel expenses
-
-Expense summaries
-
-Visitors
-
-Visitor records
-
-Visits
-
-Tenant visit association
-
-Check-in/check-out
-
-Facilities
-
-Facility definitions
-
-Hostel facility assignments
-
-Active/inactive assignment management
-
-Reports
-
-Dashboard metrics
-
-Occupancy
-
-Revenue
-
-Maintenance
-
-Scoped reporting
-
-5. Database
-
-The system uses MySQL.
-
-Major tables include:
-
-staff
-person
-superadmin
-role
-role_assignment
-
-head
-partner
-manager
-supervisor
-
-head_partner_assignment
-partner_manager_assignment
-partner_hostel_assignment
-manager_hostel_assignment
-hostel_supervisor_assignment
-
-hostel
-hostel_staff
-
-floor
-room
-bed
-
-facility
-hostel_facility
-
-tenant
-tenant_document
-emergency_contact
-tenant_preference
-tenant_stay
-tenant_allocation
-
-rent_structure
-rent
-payment
-receipt
-
-expense_category
-expense
-
-maintenance_target
-maintenance_complaint
-maintenance_request
-maintenance_update
-
-visitor
-visit
-visit_tenant
-
-The current implementation was designed without requiring schema changes during Phases 1–15.
-
-6. Important Business Rules
-
-Hostel distribution
-
-When creating a hostel, a Partner can be selected explicitly.
-
-If no Partner is supplied, the backend can assign the least-loaded active Partner, using lower Partner ID as the tie-breaker.
-
-Manager assignment
-
-A Manager can manage multiple hostels.
-
-Each hostel can have at most one active Manager.
-
-A Manager can only be assigned to a hostel belonging to the Manager's Partner.
-
-Supervisor assignment
-
-Each hostel supports at most:
-
-1 active TENANT_ADMIN
-1 active MAINTENANCE
-
-Allocation
-
-A bed cannot have multiple active allocations.
-
-Transfers preserve the old allocation as history and create the new active allocation.
-
-Payments
-
-Only successful payments can generate receipts.
-
-Scope
-
-Users only receive data belonging to their permitted hostel scope.
-
-Backend scope enforcement is authoritative.
-
-7. Authentication
-
-The frontend uses the backend authentication/session system.
-
-The frontend sends an authenticated request using a Bearer token where required.
-
-The backend resolves the authenticated staff member and builds the user's allowed scope.
-
-Typical protected flow:
-
-Login
-  ↓
-Token/session
-  ↓
-Authenticated request
-  ↓
-User identity
-  ↓
-Role
-  ↓
-Allowed hostels
-  ↓
-Controller/business operation
-
-8. Environment Configuration
-
-Backend
-
-Use the backend environment configuration appropriate for the local database and server.
-
-Typical values include:
-
-PORT=5000
-DB_HOST=localhost
-DB_PORT=3306
-DB_USER=...
-DB_PASSWORD=...
-DB_NAME=hostel_management
-JWT_SECRET=...
-
-Do not commit real credentials or secrets to source control.
-
-Frontend
-
-The current live-mode configuration uses:
-
-VITE_API_MODE=live
-VITE_API_BASE_URL=http://localhost:5000/api
-
-Use environment-specific values for production.
-
-9. Running the Project
-
-Backend
-
-From the backend directory:
-
+# Install dependencies
 npm install
+
+# Configure environment in .env
+# DB_HOST=localhost, DB_PORT=3306, DB_USER=root, DB_PASSWORD=your_password, DB_NAME=hostel_management, JWT_SECRET=your_jwt_secret
+
+# Initialize database schema & seed default data
+npm run seed
+
+# Start API dev server (default http://localhost:5000)
 npm run dev
+```
 
-For type checking:
+### 2. Frontend Setup
 
-npx tsc --noEmit
+```bash
+cd easypg
 
-Frontend
-
-From the frontend directory:
-
+# Install dependencies
 pnpm install
+
+# Start SvelteKit dev server (default http://localhost:5180)
 pnpm dev
+```
 
-Type/Svelte checking:
+---
 
-pnpm check
+## Quality Assurance & Verification
 
-Production build:
+- **Backend Type Check**:
+  ```bash
+  cd backend && npx tsc --noEmit
+  ```
+- **Frontend Diagnostics**:
+  ```bash
+  cd easypg && npx svelte-check
+  ```
+- **Production Builds**:
+  ```bash
+  cd backend && npm run build
+  cd easypg && pnpm build
+  ```
 
-pnpm build
+---
 
-10. Testing
+## License
 
-The project contains integration testing for the implemented modules.
-
-The final end-to-end verification covered:
-
-Authentication
-
-Organization hierarchy
-
-
-Role authorization
-
-Scope isolation
-
-
-The test suite also verified that cross-partner/hostel access is rejected by backend scope enforcement.
-
-11. Development Principles
-
-Backend owns business logic
-
-Do not rely on frontend checks for security.
-
-For example, even if the frontend hides Hostel B from Manager A, the backend must still reject:
-
-Manager A → Hostel B
-
-Use transactions for multi-step operations
-
-Operations such as allocation/transfer and maintenance conversion may involve multiple database updates and should remain atomic.
-
-Preserve history
-
-Do not overwrite important historical records when the business operation requires history.
-
-For example:
-
-Old Allocation → COMPLETED
-New Allocation → ACTIVE
-
-No hardcoded live business data
-
-Live mode should retrieve actual organization and operational data from the backend/database.
-
-
-13. Production Considerations
-
-Before an actual production deployment, review:
-
-HTTPS
-
-Production database credentials
-
-JWT/session secret management
-
-CORS configuration
-
-Rate limiting
-
-Database backups
-
-Logging and monitoring
-
-Error tracking
-
-Migration/deployment process
-
-Secure cookie/token configuration
-
-Environment-specific configuration
-
-Removal or isolation of development-only test artifacts
-
-14. License
-
-Add the project's intended license here before public distribution.
+This project is maintained for internal organization management.

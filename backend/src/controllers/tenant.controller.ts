@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import pool from "../config/database";
 import { AppError } from "../middleware/errorHandler";
 import { buildUserScope, enforceTenantAdminResponsibility } from "../utils/scope";
+import bcrypt from "bcryptjs";
 
 export const getAllTenants = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -136,6 +137,7 @@ export const createTenant = async (req: Request, res: Response, next: NextFuncti
         const {
             name,
             email,
+            password,
             phone,
             gender,
             date_of_birth,
@@ -163,6 +165,18 @@ export const createTenant = async (req: Request, res: Response, next: NextFuncti
             return next(new AppError("Tenant with this phone or email already exists", 400));
         }
 
+        const tenantEmail = email || `${name.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}@tenant.com`;
+        const initialPassword = password || "resident123";
+        const passwordHash = await bcrypt.hash(initialPassword, 10);
+
+        // Provision Staff Login Account for Tenant/Resident
+        await pool.query(
+            `INSERT INTO staff (name, email, password_hash, phone, role, status)
+             VALUES (?, ?, ?, ?, 'TENANT', 'ACTIVE')
+             ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash), status = 'ACTIVE'`,
+            [name, tenantEmail, passwordHash, phone]
+        );
+
         // Rule 2: Creating a Tenant MUST NOT automatically create a tenant_stay
         const [result] = await pool.query<any>(
             `INSERT INTO tenant (
@@ -171,7 +185,7 @@ export const createTenant = async (req: Request, res: Response, next: NextFuncti
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE')`,
             [
                 name,
-                email || null,
+                tenantEmail,
                 phone,
                 gender || null,
                 date_of_birth || null,

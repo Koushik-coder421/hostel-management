@@ -155,20 +155,58 @@ export const getStaffById = async (req: Request, res: Response, next: NextFuncti
     }
 };
 
+async function logAuditEvent(
+    entityType: string,
+    entityId: string,
+    action: string,
+    oldValues: any,
+    newValues: any,
+    performedBy: string
+) {
+    try {
+        await pool.query(
+            `INSERT INTO audit_log (entity_type, entity_id, action, old_values, new_values, performed_by)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [
+                entityType,
+                entityId,
+                action,
+                JSON.stringify(oldValues),
+                JSON.stringify(newValues),
+                performedBy || "SYSTEM"
+            ]
+        );
+    } catch (err) {
+        console.error("Failed to write audit log:", err);
+    }
+}
+
 export const updateStaff = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const staffId = Number(req.params.id);
-        const { name, phone, role, status } = req.body;
+        const { name, phone, role, responsibility, status } = req.body;
+        const editorId = (req as any).user?.staff_id || "SYSTEM";
 
-        const [existing] = await pool.query<any[]>(
-            "SELECT staff_id FROM staff WHERE staff_id = ?",
+        const [existingRows] = await pool.query<any[]>(
+            "SELECT staff_id, name, phone, role, status FROM staff WHERE staff_id = ?",
             [staffId]
         );
 
-        if (existing.length === 0) {
+        if (existingRows.length === 0) {
             return next(new AppError("Staff not found", 404));
         }
+        const existing = existingRows[0];
 
+        // Server-Side Role + Responsibility Validation
+        const targetRole = role || existing.role;
+        if (targetRole === "SUPERVISOR" && responsibility && !["TENANT_ADMIN", "MAINTENANCE"].includes(responsibility)) {
+            return next(new AppError("Invalid responsibility for SUPERVISOR. Must be TENANT_ADMIN or MAINTENANCE.", 422));
+        }
+        if (targetRole !== "SUPERVISOR" && responsibility) {
+            return next(new AppError(`Role '${targetRole}' cannot have a task responsibility scope.`, 422));
+        }
+
+        // Perform Update
         await pool.query(
             `UPDATE staff
              SET name = COALESCE(?, name),
@@ -178,6 +216,53 @@ export const updateStaff = async (req: Request, res: Response, next: NextFunctio
              WHERE staff_id = ?`,
             [name, phone, role, status, staffId]
         );
+
+        // Update Supervisor Assignment Role if responsibility provided
+        if (targetRole === "SUPERVISOR" && responsibility) {
+            await pool.query(
+                `UPDATE hostel_supervisor_assignment hsa
+                 JOIN supervisor s ON hsa.supervisor_id = s.supervisor_id
+                 JOIN person pe ON s.person_id = pe.person_id
+                 JOIN staff st ON pe.email = st.email
+                 SET hsa.assignment_role = ?
+                 WHERE st.staff_id = ? AND hsa.is_current = TRUE`,
+                [responsibility, staffId]
+            );
+        }
+
+        // Explicit Audit Event Logging
+        if (name && name !== existing.name) {
+            await logAuditEvent(
+                "STAFF_PROFILE",
+                String(staffId),
+                "UPDATE",
+                { name: existing.name },
+                { name },
+                String(editorId)
+            );
+        }
+
+        if (responsibility) {
+            await logAuditEvent(
+                "ROLE_BINDING",
+                String(staffId),
+                "UPDATE",
+                { role: targetRole, responsibility: "PREVIOUS" },
+                { role: targetRole, responsibility },
+                String(editorId)
+            );
+        }
+
+        if (status && status !== existing.status) {
+            await logAuditEvent(
+                "STAFF_PROFILE",
+                String(staffId),
+                "STATUS_TOGGLE",
+                { status: existing.status, role: targetRole },
+                { status, role: targetRole },
+                String(editorId)
+            );
+        }
 
         res.json({
             status: "success",
@@ -191,9 +276,10 @@ export const updateStaff = async (req: Request, res: Response, next: NextFunctio
 export const deleteStaff = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const staffId = Number(req.params.id);
+        const editorId = (req as any).user?.staff_id || "SYSTEM";
 
         const [existing] = await pool.query<any[]>(
-            "SELECT staff_id FROM staff WHERE staff_id = ?",
+            "SELECT staff_id, status, role FROM staff WHERE staff_id = ?",
             [staffId]
         );
 
@@ -204,6 +290,15 @@ export const deleteStaff = async (req: Request, res: Response, next: NextFunctio
         await pool.query(
             "UPDATE staff SET status = 'INACTIVE' WHERE staff_id = ?",
             [staffId]
+        );
+
+        await logAuditEvent(
+            "STAFF_PROFILE",
+            String(staffId),
+            "STATUS_TOGGLE",
+            { status: existing[0].status, role: existing[0].role },
+            { status: "INACTIVE", role: existing[0].role },
+            String(editorId)
         );
 
         res.json({

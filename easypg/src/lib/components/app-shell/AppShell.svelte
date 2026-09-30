@@ -17,6 +17,7 @@
     hostels = [],
     activeHostelId = '',
     showSelector = true,
+    enhanceAction,
     children
   }: {
     navItems?: NavItem[];
@@ -28,6 +29,7 @@
     hostels?: { id: string; name: string; code: string }[];
     activeHostelId?: string;
     showSelector?: boolean;
+    enhanceAction?: (node: HTMLFormElement) => { destroy?(): void } | void;
     children: Snippet;
   } = $props();
   const titles: Record<string, string> = {
@@ -47,7 +49,7 @@
 </script>
 
 <AstryxAppShell variant="section" height="fill" mobileNav={{ breakpoint: 'lg' }}>
-  {#snippet sideNav()}<Sidebar {navItems} {currentPath} {user} {role} />{/snippet}
+  {#snippet sideNav()}<Sidebar {navItems} {currentPath} {user} {role} {enhanceAction} />{/snippet}
   {#snippet topNav()}<Header
       title={resolvedTitle}
       {hostels}
@@ -55,6 +57,7 @@
       showSelector={showSelector && role !== 'platform_admin'}
       {user}
       {role}
+      {enhanceAction}
     />{/snippet}
   <div {...sx(shell.content)}>{@render children()}</div>
 </AstryxAppShell>

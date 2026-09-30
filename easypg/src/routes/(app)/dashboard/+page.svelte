@@ -38,6 +38,10 @@
   import UserCheck from '@lucide/svelte/icons/user-check';
   import Users from '@lucide/svelte/icons/users';
 
+  import { onMount } from 'svelte';
+  import { fetchMyStayDetails, submitResidentComplaint, fetchResidentComplaints } from '$lib/services/residentService';
+  import { updateStaffProfile } from '$lib/services/hierarchyService';
+
   let { data }: { data: PageData } = $props();
   let role = $derived(data.role);
   let platformData = $derived(data.platformData);
@@ -45,6 +49,86 @@
   let managerData = $derived(data.managerData);
   let switchingHostelId = $state<string | null>(null);
   let switchError = $state('');
+
+  // Resident State
+  let residentStay = $state<any>(null);
+  let residentComplaints = $state<any[]>([]);
+  let complaintDescription = $state('');
+  let complaintType = $state<'ROOM' | 'BED' | 'FACILITY'>('ROOM');
+  let complaintPriority = $state<'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'>('MEDIUM');
+  let isSubmittingComplaint = $state(false);
+  let complaintMsg = $state('');
+  let complaintErr = $state('');
+
+  // Password change state
+  let newPassword = $state('');
+  let showNewPassword = $state(false);
+  let passwordMsg = $state('');
+  let passwordErr = $state('');
+
+  onMount(async () => {
+    if ((role as string) === 'TENANT' || (role as string) === 'tenant' || (role as string) === 'resident') {
+      await loadResidentData();
+    }
+  });
+
+  async function loadResidentData() {
+    try {
+      const stayRes = await fetchMyStayDetails();
+      residentStay = stayRes.data || stayRes;
+      if (residentStay?.resident?.tenant_id) {
+        const compRes = await fetchResidentComplaints(residentStay.resident.tenant_id);
+        residentComplaints = compRes.data || compRes;
+      }
+    } catch (err) {
+      console.error("Failed to load resident stay data:", err);
+    }
+  }
+
+  async function handleRaiseComplaint(e: Event) {
+    e.preventDefault();
+    if (!residentStay?.resident?.tenant_id || !residentStay?.stay) {
+      complaintErr = 'No active stay allocation found to raise complaint.';
+      return;
+    }
+    isSubmittingComplaint = true;
+    complaintMsg = '';
+    complaintErr = '';
+    try {
+      const targetId = complaintType === 'ROOM' ? residentStay.stay.room_id : (complaintType === 'BED' ? residentStay.stay.bed_id : residentStay.stay.hostel_id);
+      await submitResidentComplaint({
+        tenant_id: residentStay.resident.tenant_id,
+        target_type: complaintType,
+        target_id: targetId,
+        description: complaintDescription,
+        priority: complaintPriority
+      });
+      complaintMsg = 'Complaint submitted successfully! It has been routed to your Maintenance Supervisor.';
+      complaintDescription = '';
+      await loadResidentData();
+    } catch (err: any) {
+      complaintErr = err.message || 'Failed to submit complaint';
+    } finally {
+      isSubmittingComplaint = false;
+    }
+  }
+
+  async function handleChangePassword(e: Event) {
+    e.preventDefault();
+    if (!newPassword.trim()) return;
+    passwordMsg = '';
+    passwordErr = '';
+    try {
+      const staffId = (data as any)?.user?.staff_id || (data as any)?.user?.id;
+      if (staffId) {
+        await updateStaffProfile(staffId, { password: newPassword });
+      }
+      passwordMsg = 'Password updated successfully!';
+      newPassword = '';
+    } catch (err: any) {
+      passwordErr = err.message || 'Failed to update password';
+    }
+  }
 
   function actionError(result: unknown): string {
     if (typeof result === 'object' && result !== null && 'data' in result) {
@@ -86,7 +170,288 @@
 {#snippet arrowIcon()}<ArrowRight size={14} />{/snippet}
 
 <div {...sx(styles.page)}>
-  {#if (role === 'platform_admin' || role === 'SUPERADMIN' || role === 'ADMIN' || role === 'HEAD') && platformData}
+  {#if (role as string) === 'TENANT' || (role as string) === 'tenant' || (role as string) === 'resident'}
+    <header style="margin-bottom: 2rem;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+        <div>
+          <span style="font-size: 0.875rem; font-weight: 600; color: var(--color-accent, #3b82f6); text-transform: uppercase; letter-spacing: 0.05em;">Resident Portal</span>
+          <h1 style="font-size: 1.875rem; font-weight: 700; margin: 0.25rem 0 0.5rem 0;">Welcome, {residentStay?.resident?.name || 'Resident'}</h1>
+          <p style="color: var(--color-text-secondary, #94a3b8); margin: 0;">Manage your stay details, raise maintenance complaints, and view complaint status.</p>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          <span class="badge neutral" style="padding: 0.5rem 1rem; border-radius: 9999px; background: rgba(59, 130, 246, 0.1); color: #60a5fa; font-weight: 600;">
+            Status: {residentStay?.resident?.status || 'ACTIVE'}
+          </span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Stay & Supervisor Info Grid -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+      <!-- Active Stay Card -->
+      <div style="background: var(--color-background-card, #1e293b); border: 1px solid var(--color-border, #334155); border-radius: 12px; padding: 1.5rem;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+          <h3 style="font-size: 1.125rem; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+            🏠 Current Stay Allocation
+          </h3>
+          <span style="font-size: 0.75rem; padding: 0.25rem 0.625rem; border-radius: 4px; background: #059669; color: white; font-weight: 600;">
+            Active Allocation
+          </span>
+        </div>
+
+        {#if residentStay?.stay}
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; font-size: 0.9375rem;">
+            <div>
+              <span style="color: #94a3b8; font-size: 0.8125rem; display: block;">Hostel Name</span>
+              <strong style="color: #f8fafc;">{residentStay.stay.hostel_name}</strong>
+            </div>
+            <div>
+              <span style="color: #94a3b8; font-size: 0.8125rem; display: block;">Floor</span>
+              <strong style="color: #f8fafc;">{residentStay.stay.floor_name || `Floor ${residentStay.stay.floor_number}`}</strong>
+            </div>
+            <div>
+              <span style="color: #94a3b8; font-size: 0.8125rem; display: block;">Room Number</span>
+              <strong style="color: #f8fafc;">Room {residentStay.stay.room_number} ({residentStay.stay.room_type || 'Standard'})</strong>
+            </div>
+            <div>
+              <span style="color: #94a3b8; font-size: 0.8125rem; display: block;">Bed Assignment</span>
+              <strong style="color: #38bdf8;">Bed {residentStay.stay.bed_number}</strong>
+            </div>
+            <div style="grid-column: span 2;">
+              <span style="color: #94a3b8; font-size: 0.8125rem; display: block;">Hostel Address</span>
+              <span style="color: #cbd5e1;">{residentStay.stay.hostel_address || 'Address not specified'}</span>
+            </div>
+            <div style="grid-column: span 2; border-top: 1px dashed #334155; padding-top: 0.75rem; margin-top: 0.25rem;">
+              <span style="color: #94a3b8; font-size: 0.8125rem; display: block;">Check-in Date</span>
+              <strong style="color: #f8fafc;">{residentStay.stay.start_date ? formatDate(residentStay.stay.start_date) : 'N/A'}</strong>
+            </div>
+          </div>
+        {:else}
+          <div style="padding: 1.5rem 0; text-align: center; color: #94a3b8;">
+            <p>No active stay allocation recorded yet.</p>
+          </div>
+        {/if}
+      </div>
+
+      <!-- Maintenance Supervisor Card -->
+      <div style="background: var(--color-background-card, #1e293b); border: 1px solid var(--color-border, #334155); border-radius: 12px; padding: 1.5rem;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+          <h3 style="font-size: 1.125rem; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+            🛠️ Maintenance Supervisor Contact
+          </h3>
+          <span style="font-size: 0.75rem; padding: 0.25rem 0.625rem; border-radius: 4px; background: #2563eb; color: white; font-weight: 600;">
+            Assigned Contact
+          </span>
+        </div>
+
+        {#if residentStay?.maintenance_supervisor}
+          <div style="display: flex; flex-direction: column; gap: 1rem; font-size: 0.9375rem;">
+            <div>
+              <span style="color: #94a3b8; font-size: 0.8125rem; display: block;">Supervisor Name</span>
+              <strong style="color: #f8fafc; font-size: 1.125rem;">{residentStay.maintenance_supervisor.supervisor_name}</strong>
+            </div>
+            <div>
+              <span style="color: #94a3b8; font-size: 0.8125rem; display: block;">Phone Number</span>
+              <a href={`tel:${residentStay.maintenance_supervisor.supervisor_phone}`} style="color: #38bdf8; text-decoration: none; font-weight: 600;">
+                📞 {residentStay.maintenance_supervisor.supervisor_phone || 'Not available'}
+              </a>
+            </div>
+            <div>
+              <span style="color: #94a3b8; font-size: 0.8125rem; display: block;">Email Address</span>
+              <a href={`mailto:${residentStay.maintenance_supervisor.supervisor_email}`} style="color: #38bdf8; text-decoration: none;">
+                ✉️ {residentStay.maintenance_supervisor.supervisor_email || 'Not available'}
+              </a>
+            </div>
+            <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); padding: 0.75rem; border-radius: 6px; margin-top: 0.5rem;">
+              <p style="margin: 0; font-size: 0.8125rem; color: #93c5fd;">
+                ℹ️ Any complaints raised below will be automatically routed to {residentStay.maintenance_supervisor.supervisor_name}.
+              </p>
+            </div>
+          </div>
+        {:else}
+          <div style="padding: 1.5rem 0; text-align: center; color: #94a3b8;">
+            <p>No Maintenance Supervisor currently assigned to this property.</p>
+          </div>
+        {/if}
+      </div>
+    </div>
+
+    <!-- Raise Complaint & Password Grid -->
+    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+      <!-- Raise Complaint Form -->
+      <div style="background: var(--color-background-card, #1e293b); border: 1px solid var(--color-border, #334155); border-radius: 12px; padding: 1.5rem;">
+        <h3 style="font-size: 1.125rem; font-weight: 600; margin: 0 0 1rem 0; display: flex; align-items: center; gap: 0.5rem;">
+          📢 Submit a Maintenance Complaint / Issue
+        </h3>
+
+        {#if complaintMsg}
+          <div style="background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; color: #34d399; padding: 0.75rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.875rem;">
+            {complaintMsg}
+          </div>
+        {/if}
+        {#if complaintErr}
+          <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #f87171; padding: 0.75rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.875rem;">
+            {complaintErr}
+          </div>
+        {/if}
+
+        <form onsubmit={handleRaiseComplaint} style="display: flex; flex-direction: column; gap: 1rem;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div>
+              <label for="complaintTypeSelect" style="display: block; font-size: 0.8125rem; font-weight: 600; color: #cbd5e1; margin-bottom: 0.375rem;">Issue Category</label>
+              <select id="complaintTypeSelect" bind:value={complaintType} style="width: 100%; padding: 0.625rem; border-radius: 6px; background: #0f172a; border: 1px solid #334155; color: white; font-size: 0.875rem;">
+                <option value="ROOM">Room Issue (Plumbing, Electrical, Door, AC)</option>
+                <option value="BED">Bed Issue (Mattress, Frame, Bedding)</option>
+                <option value="FACILITY">Hostel Common Facility (Wifi, Water Heater, Mess)</option>
+              </select>
+            </div>
+            <div>
+              <label for="complaintPrioritySelect" style="display: block; font-size: 0.8125rem; font-weight: 600; color: #cbd5e1; margin-bottom: 0.375rem;">Priority Level</label>
+              <select id="complaintPrioritySelect" bind:value={complaintPriority} style="width: 100%; padding: 0.625rem; border-radius: 6px; background: #0f172a; border: 1px solid #334155; color: white; font-size: 0.875rem;">
+                <option value="LOW">Low (Minor request)</option>
+                <option value="MEDIUM">Medium (Normal maintenance)</option>
+                <option value="HIGH">High (Urgent attention needed)</option>
+                <option value="URGENT">Urgent (Emergency / Severe hazard)</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label for="complaintDescriptionArea" style="display: block; font-size: 0.8125rem; font-weight: 600; color: #cbd5e1; margin-bottom: 0.375rem;">Problem Description</label>
+            <textarea
+              id="complaintDescriptionArea"
+              bind:value={complaintDescription}
+              required
+              rows={4}
+              placeholder="Describe the issue in detail (e.g. Tap leaking in bathroom, air conditioner not cooling)..."
+              style="width: 100%; padding: 0.75rem; border-radius: 6px; background: #0f172a; border: 1px solid #334155; color: white; font-size: 0.875rem; resize: vertical;"
+            ></textarea>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end;">
+            <button
+              type="submit"
+              disabled={isSubmittingComplaint}
+              style="background: #2563eb; color: white; padding: 0.625rem 1.25rem; border-radius: 6px; font-weight: 600; border: none; cursor: pointer;"
+            >
+              {isSubmittingComplaint ? 'Submitting...' : 'Submit Complaint'}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Password Change Card -->
+      <div style="background: var(--color-background-card, #1e293b); border: 1px solid var(--color-border, #334155); border-radius: 12px; padding: 1.5rem;">
+        <h3 style="font-size: 1.125rem; font-weight: 600; margin: 0 0 1rem 0; display: flex; align-items: center; gap: 0.5rem;">
+          🔑 Account Credentials
+        </h3>
+        <p style="font-size: 0.8125rem; color: #94a3b8; margin-bottom: 1rem;">
+          Update your login password for secure portal access.
+        </p>
+
+        {#if passwordMsg}
+          <div style="background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; color: #34d399; padding: 0.625rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.8125rem;">
+            {passwordMsg}
+          </div>
+        {/if}
+        {#if passwordErr}
+          <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #f87171; padding: 0.625rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.8125rem;">
+            {passwordErr}
+          </div>
+        {/if}
+
+        <form onsubmit={handleChangePassword} style="display: flex; flex-direction: column; gap: 0.875rem;">
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.375rem;">
+              <label for="newPasswordInput" style="font-size: 0.8125rem; font-weight: 600; color: #cbd5e1; margin: 0;">New Password</label>
+              <button
+                type="button"
+                style="background: transparent; border: none; color: #38bdf8; font-size: 0.75rem; cursor: pointer; padding: 0;"
+                onclick={() => (showNewPassword = !showNewPassword)}
+              >
+                {showNewPassword ? '🔒 Hide Password' : '👁️ Show Password'}
+              </button>
+            </div>
+            <input
+              id="newPasswordInput"
+              type={showNewPassword ? 'text' : 'password'}
+              bind:value={newPassword}
+              required
+              placeholder="Enter new password"
+              style="width: 100%; padding: 0.625rem; border-radius: 6px; background: #0f172a; border: 1px solid #334155; color: white; font-size: 0.875rem;"
+            />
+          </div>
+
+          <button
+            type="submit"
+            style="background: #475569; color: white; padding: 0.625rem 1rem; border-radius: 6px; font-weight: 600; border: none; cursor: pointer;"
+          >
+            Update Password
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Complaint History Section -->
+    <div style="background: var(--color-background-card, #1e293b); border: 1px solid var(--color-border, #334155); border-radius: 12px; padding: 1.5rem; margin-bottom: 2rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h3 style="font-size: 1.125rem; font-weight: 600; margin: 0;">
+          📜 Submitted Complaints History
+        </h3>
+        <span style="font-size: 0.8125rem; color: #94a3b8;">{residentComplaints.length} Total Tickets</span>
+      </div>
+
+      {#if residentComplaints.length === 0}
+        <div style="text-align: center; padding: 2rem 0; color: #94a3b8;">
+          <p style="margin: 0;">No complaints have been submitted yet.</p>
+        </div>
+      {:else}
+        <div style="overflow-x: auto;">
+          <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.875rem;">
+            <thead>
+              <tr style="border-bottom: 1px solid #334155; color: #94a3b8;">
+                <th style="padding: 0.75rem;">Ticket ID</th>
+                <th style="padding: 0.75rem;">Category</th>
+                <th style="padding: 0.75rem;">Priority</th>
+                <th style="padding: 0.75rem;">Description</th>
+                <th style="padding: 0.75rem;">Status</th>
+                <th style="padding: 0.75rem;">Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each residentComplaints as complaint}
+                <tr style="border-bottom: 1px solid #1e293b; color: white;">
+                  <td style="padding: 0.75rem; font-weight: 600; color: #38bdf8;">#{complaint.complaint_id || complaint.ticket_id || complaint.id}</td>
+                  <td style="padding: 0.75rem;">{complaint.target_type || complaint.type}</td>
+                  <td style="padding: 0.75rem;">
+                    <span style={`padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 700; ${
+                      complaint.priority === 'URGENT' ? 'background: #991b1b; color: #fca5a5;' :
+                      complaint.priority === 'HIGH' ? 'background: #9a3412; color: #fdba74;' :
+                      complaint.priority === 'MEDIUM' ? 'background: #854d0e; color: #fef08a;' :
+                      'background: #1e3a8a; color: #93c5fd;'
+                    }`}>
+                      {complaint.priority || 'MEDIUM'}
+                    </span>
+                  </td>
+                  <td style="padding: 0.75rem; max-width: 300px;">{complaint.description}</td>
+                  <td style="padding: 0.75rem;">
+                    <span style={`padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 700; ${
+                      complaint.status === 'RESOLVED' || complaint.status === 'CLOSED' ? 'background: #065f46; color: #6ee7b7;' :
+                      complaint.status === 'IN_PROGRESS' ? 'background: #1e40af; color: #93c5fd;' :
+                      'background: #374151; color: #e5e7eb;'
+                    }`}>
+                      {complaint.status || 'OPEN'}
+                    </span>
+                  </td>
+                  <td style="padding: 0.75rem; color: #94a3b8;">{complaint.created_at ? formatDate(complaint.created_at) : 'N/A'}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      {/if}
+    </div>
+  {:else if (role === 'platform_admin' || role === 'SUPERADMIN' || role === 'ADMIN' || role === 'HEAD') && platformData}
     <header {...sx(styles.pageHeader)}>
       <div {...sx(styles.headerCopy)}>
         <Text type="label" color="accent" weight="semibold" display="block"
@@ -233,7 +598,16 @@
         {/each}
       </div>
     </section>
-  {:else if (role === 'organization_admin' || role === 'PARTNER') && orgData}
+  {:else if ((role as string) === 'organization_admin' || (role as string) === 'org_admin' || (role as string) === 'ORG_ADMIN' || (role as string) === 'partner' || role === 'PARTNER') && orgData}
+    <div style="background: var(--color-background-card, #1e293b); border: 1px solid var(--color-border, #334155); border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+      <div>
+        <Text type="label" color="accent" weight="semibold" display="block">Assigned Role & Organization Scope</Text>
+        <Text type="body" weight="semibold" display="block">Role: Partner / Organization Admin</Text>
+        <Text type="supporting" color="secondary" display="block">Organization: {orgData.organizationName} • {orgData.hostelCount} Suitable Hostels Assigned</Text>
+      </div>
+      <Badge label="Organization Admin" variant="info" />
+    </div>
+
     <header {...sx(styles.pageHeader)}>
       <div {...sx(styles.headerCopy)}>
         <Text type="label" color="accent" weight="semibold" display="block"
@@ -384,6 +758,15 @@
       </div>
     </section>
   {:else if managerData}
+    <div style="background: var(--color-background-card, #1e293b); border: 1px solid var(--color-border, #334155); border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+      <div>
+        <Text type="label" color="accent" weight="semibold" display="block">Assigned Role & Property Scope</Text>
+        <Text type="body" weight="semibold" display="block">Role: {(role as string) === 'supervisor' || role === 'SUPERVISOR' ? 'Supervisor' : 'Property Manager'}</Text>
+        <Text type="supporting" color="secondary" display="block">Assigned Property: {managerData.hostelName} (Suitable for operational management)</Text>
+      </div>
+      <Badge label={(role as string) === 'supervisor' || role === 'SUPERVISOR' ? 'Supervisor' : 'Property Manager'} variant="success" />
+    </div>
+
     <header {...sx(styles.pageHeader)}>
       <div {...sx(styles.headerCopy)}>
         <Text type="label" color="accent" weight="semibold" display="block">Daily overview</Text>

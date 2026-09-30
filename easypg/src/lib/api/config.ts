@@ -4,7 +4,7 @@ export interface ApiConfig {
 }
 export function parseConfig(
   mode: string | undefined,
-  baseUrl = "/api/v1",
+  baseUrl = "/api",
 ): ApiConfig {
   if (mode !== undefined && mode !== "demo" && mode !== "live") {
     throw new Error("VITE_API_MODE must be demo or live");
@@ -16,7 +16,7 @@ export function parseConfig(
   }
   if (baseUrl.startsWith("//"))
     throw new Error("Protocol-relative API URLs are not supported");
-  return { mode: mode ?? "demo", baseUrl: baseUrl.replace(/\/$/, "") };
+  return { mode: mode ?? "live", baseUrl: baseUrl.replace(/\/$/, "") };
 }
 export const config = parseConfig(
   import.meta.env.VITE_API_MODE,

@@ -55,6 +55,7 @@ export interface Hostel extends HostelOption {
   city: string;
   addressLine1: string;
   status: "active" | "inactive";
+  deactivation_reason?: string | null;
   timezone: string;
 }
 export interface Occupancy {
@@ -387,6 +388,61 @@ export interface PageDataMap {
     recentCheckouts: RecentCheckout[];
   };
   "/payments": { invoices: Invoice[] };
+  "/visitors": {
+    activeHostel: Hostel | null;
+    visitors: {
+      id: string;
+      visitorName: string;
+      phone: string;
+      purpose: string;
+      relation: string;
+      residentName: string;
+      roomNumber: string;
+      hostelName: string;
+      entryTime: Date | string;
+      exitTime: Date | string | null;
+      status: "IN_HOUSE" | "DEPARTED";
+    }[];
+    metrics: { totalInHouse: number; totalToday: number };
+    residents: {
+      tenantId: string;
+      residentName: string;
+      hostelId: string;
+      hostelName: string;
+      roomId: string;
+      roomNumber: string;
+      bedLabel: string;
+    }[];
+  };
+  "/maintenance": {
+    activeHostel: Hostel | null;
+    complaints: {
+      complaint_id: number | string;
+      tenant_id: number | string;
+      tenant_name: string;
+      target_type: string;
+      description: string;
+      priority: string;
+      status: string;
+    }[];
+    metrics: { totalOpen: number; totalCount: number };
+  };
+  "/expenses": {
+    activeHostel: Hostel | null;
+    expenses: {
+      expense_id: number | string;
+      category_name: string;
+      description: string;
+      expense_date: string;
+      amount: number;
+      status: string;
+    }[];
+    categories: {
+      expense_category_id: number | string;
+      category_name: string;
+    }[];
+    totalAmount: number;
+  };
   "/reports": {
     hostel: Hostel | null;
     floorOccupancy: FloorOccupancyReport[];

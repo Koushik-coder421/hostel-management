@@ -2,8 +2,17 @@ import { Request, Response, NextFunction } from "express";
 import pool from "../config/database";
 import { AppError } from "../middleware/errorHandler";
 
+async function ensureHostelColumns() {
+    try {
+        await pool.query("ALTER TABLE hostel ADD COLUMN deactivation_reason VARCHAR(255) NULL");
+    } catch (err) {
+        // column already exists
+    }
+}
+
 export const getAllHostels = async (req: Request, res: Response, next: NextFunction) => {
     try {
+        await ensureHostelColumns();
         const { status } = req.query;
         let query = "SELECT * FROM hostel WHERE 1=1";
         const params: any[] = [];
@@ -29,6 +38,7 @@ export const getAllHostels = async (req: Request, res: Response, next: NextFunct
 
 export const getHostelById = async (req: Request, res: Response, next: NextFunction) => {
     try {
+        await ensureHostelColumns();
         const hostelId = Number(req.params.id);
 
         const [rows] = await pool.query<any[]>(
@@ -103,6 +113,7 @@ export const getHostelById = async (req: Request, res: Response, next: NextFunct
 export const createHostel = async (req: Request, res: Response, next: NextFunction) => {
     const connection = await pool.getConnection();
     try {
+        await ensureHostelColumns();
         const {
             name,
             address,
@@ -132,8 +143,6 @@ export const createHostel = async (req: Request, res: Response, next: NextFuncti
             }
             assignedPartnerId = Number(partner_id);
         } else {
-            // Automatic balanced distribution: select active partner with fewest assigned current hostels.
-            // Tie-breaker: lowest partner_id.
             const [leastLoadedPartner] = await connection.query<any[]>(
                 `SELECT p.partner_id, COUNT(pha.hostel_id) as hostel_count
                  FROM partner p
@@ -190,8 +199,9 @@ export const createHostel = async (req: Request, res: Response, next: NextFuncti
 
 export const updateHostel = async (req: Request, res: Response, next: NextFunction) => {
     try {
+        await ensureHostelColumns();
         const hostelId = Number(req.params.id);
-        const { name, address, contact_number, status } = req.body;
+        const { name, address, contact_number, status, deactivation_reason } = req.body;
 
         const [existing] = await pool.query<any[]>(
             "SELECT hostel_id FROM hostel WHERE hostel_id = ?",
@@ -212,6 +222,12 @@ export const updateHostel = async (req: Request, res: Response, next: NextFuncti
             [name, address, contact_number, status, hostelId]
         );
 
+        if (status === "ACTIVE") {
+            await pool.query("UPDATE hostel SET deactivation_reason = NULL WHERE hostel_id = ?", [hostelId]);
+        } else if (status === "INACTIVE" && deactivation_reason !== undefined) {
+            await pool.query("UPDATE hostel SET deactivation_reason = ? WHERE hostel_id = ?", [deactivation_reason, hostelId]);
+        }
+
         res.json({
             status: "success",
             message: "Hostel updated successfully"
@@ -223,7 +239,9 @@ export const updateHostel = async (req: Request, res: Response, next: NextFuncti
 
 export const deleteHostel = async (req: Request, res: Response, next: NextFunction) => {
     try {
+        await ensureHostelColumns();
         const hostelId = Number(req.params.id);
+        const { deactivation_reason } = req.body || {};
 
         const [existing] = await pool.query<any[]>(
             "SELECT hostel_id FROM hostel WHERE hostel_id = ?",
@@ -234,7 +252,7 @@ export const deleteHostel = async (req: Request, res: Response, next: NextFuncti
             return next(new AppError("Hostel not found", 404));
         }
 
-        await pool.query("UPDATE hostel SET status = 'INACTIVE' WHERE hostel_id = ?", [hostelId]);
+        await pool.query("UPDATE hostel SET status = 'INACTIVE', deactivation_reason = ? WHERE hostel_id = ?", [deactivation_reason || "Deactivated by administrator", hostelId]);
 
         res.json({
             status: "success",

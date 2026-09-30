@@ -1,10 +1,11 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import pool from "../config/database";
 import { AppError } from "./errorHandler";
 
 const JWT_SECRET = process.env.JWT_SECRET || "hostel_management_super_secret_key_2026";
 
-export const authenticateToken = (
+export const authenticateToken = async (
     req: Request,
     res: Response,
     next: NextFunction
@@ -18,6 +19,19 @@ export const authenticateToken = (
 
     try {
         const decoded = jwt.verify(token, JWT_SECRET) as any;
+        const staffId = decoded.staff_id;
+
+        // Authoritative Database Account Status Verification
+        if (staffId) {
+            const [rows] = await pool.query<any[]>(
+                "SELECT status FROM staff WHERE staff_id = ? LIMIT 1",
+                [staffId]
+            );
+            if (rows.length > 0 && rows[0].status === "INACTIVE") {
+                return next(new AppError("Account is disabled. Please contact your administrator.", 403));
+            }
+        }
+
         (req as any).user = {
             staff_id: decoded.staff_id,
             name: decoded.name,
@@ -26,6 +40,7 @@ export const authenticateToken = (
         };
         next();
     } catch (error) {
+        if (error instanceof AppError) return next(error);
         return next(new AppError("Invalid or expired access token", 403));
     }
 };

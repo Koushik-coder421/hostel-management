@@ -11,6 +11,8 @@ import Settings from '@lucide/svelte/icons/settings';
 import LogIn from '@lucide/svelte/icons/log-in';
 import LogOut from '@lucide/svelte/icons/log-out';
 import MoreHorizontal from '@lucide/svelte/icons/more-horizontal';
+import Shield from '@lucide/svelte/icons/shield';
+import Video from '@lucide/svelte/icons/video';
 
 export const ICON_MAP: Record<string, Component<any>> = {
   'layout-dashboard': LayoutDashboard,
@@ -24,7 +26,9 @@ export const ICON_MAP: Record<string, Component<any>> = {
   'settings': Settings,
   'log-in': LogIn,
   'log-out': LogOut,
-  'more-horizontal': MoreHorizontal
+  'more-horizontal': MoreHorizontal,
+  'shield': Shield,
+  'video': Video
 };
 
 export function getNavIcon(name: string): Component<any> {

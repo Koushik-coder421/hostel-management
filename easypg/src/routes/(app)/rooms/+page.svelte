@@ -77,21 +77,85 @@
   }
 
 
+  import { invalidateAll } from '$app/navigation';
+  import { createFloor, createRoom } from '$lib/services/roomService';
+
+  let isAddFloorOpen = $state(false);
+  let isAddRoomOpen = $state(false);
+  let newFloorNumber = $state(1);
+  let newFloorName = $state('');
+
+  let newRoomFloorId = $state<number | undefined>(undefined);
+  let newRoomNumber = $state('');
+  let newRoomType = $state('NON_AC');
+  let newRoomCapacity = $state(2);
+  let newRoomRent = $state(5000);
+  let isSubmitting = $state(false);
+  let actionError = $state('');
+
+  async function handleAddFloor(e: Event) {
+    e.preventDefault();
+    isSubmitting = true;
+    actionError = '';
+    try {
+      const hostelId = data.hostel?.id || 1;
+      await createFloor({
+        hostel_id: Number(hostelId),
+        floor_number: Number(newFloorNumber),
+        name: newFloorName || `Floor ${newFloorNumber}`
+      });
+      isAddFloorOpen = false;
+      await invalidateAll();
+    } catch (err: any) {
+      actionError = err.message || 'Failed to add floor';
+    } finally {
+      isSubmitting = false;
+    }
+  }
+
+  async function handleAddRoom(e: Event) {
+    e.preventDefault();
+    if (!newRoomFloorId) {
+      actionError = 'Please select a floor';
+      return;
+    }
+    isSubmitting = true;
+    actionError = '';
+    try {
+      await createRoom({
+        floor_id: Number(newRoomFloorId),
+        room_number: newRoomNumber,
+        room_type: newRoomType,
+        capacity: Number(newRoomCapacity),
+        rent_amount: Number(newRoomRent)
+      });
+      isAddRoomOpen = false;
+      await invalidateAll();
+    } catch (err: any) {
+      actionError = err.message || 'Failed to add room';
+    } finally {
+      isSubmitting = false;
+    }
+  }
 </script>
 
-<svelte:head><title>Rooms & Beds — {data.hostel?.name ?? 'EasyPG'}</title></svelte:head>
+<svelte:head><title>Rooms &amp; Beds — {data.hostel?.name ?? 'EasyPG'}</title></svelte:head>
 
 <div {...sx(styles.page)}>
   <header {...sx(styles.header)}>
     <div>
       <p {...sx(styles.eyebrow)}>Property inventory</p>
       <div {...sx(styles.titleRow)}>
-        <Heading level={1}>Rooms & Beds</Heading>
+        <Heading level={1}>Rooms &amp; Beds</Heading>
         {#if data.hostel}<Badge label={data.hostel.code} xstyle={styles.codeBadge} />{/if}
       </div>
       <Text as="p" type="supporting" xstyle={styles.description}
         >A clear view of every floor, room, and available bed.</Text
       >
+      <div style="display: flex; gap: 0.5rem; margin-top: 0.8rem;">
+        <Button label="+ Add Floor" variant="secondary" size="sm" onclick={() => { actionError = ''; isAddFloorOpen = true; }} />
+        <Button label="+ Add Room" variant="primary" size="sm" onclick={() => { actionError = ''; newRoomFloorId = data.floors.length > 0 ? Number(data.floors[0].id) : undefined; isAddRoomOpen = true; }} />
+      </div>
     </div>
     <div {...sx(styles.statGrid)}>
       <Card padding={3} xstyle={styles.stat}
@@ -466,4 +530,83 @@
       </footer>
     </div>
   {/if}
+</Dialog>
+
+<Dialog isOpen={isAddFloorOpen} onOpenChange={(open) => (isAddFloorOpen = open)} purpose="form" width="460px">
+  <div style="padding: 1.5rem; background: var(--color-background-card, #1e293b); color: var(--color-text-primary, inherit); border-radius: 8px;">
+    <h2 style="margin-top: 0; font-size: 1.2rem; margin-bottom: 0.5rem;">+ Add New Floor</h2>
+    <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); padding: 0.625rem 0.875rem; border-radius: 6px; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between;">
+      <div>
+        <span style="font-size: 0.75rem; color: #93c5fd; font-weight: 600; display: block; text-transform: uppercase;">Target Hostel Property</span>
+        <strong style="color: #f8fafc; font-size: 0.95rem;">🏢 {data.hostel?.name ?? 'Selected Hostel'}</strong>
+      </div>
+      {#if data.hostel?.code}
+        <span style="background: #1e3a8a; color: #93c5fd; font-weight: 700; font-size: 0.75rem; padding: 0.25rem 0.5rem; border-radius: 4px;">{data.hostel.code}</span>
+      {/if}
+    </div>
+    <p style="font-size: 0.85rem; color: #9ca3af; margin-bottom: 1rem;">Create a new floor level for this hostel building.</p>
+    {#if actionError}<div style="color: #f87171; margin-bottom: 0.8rem; font-size: 0.85rem; background: rgba(239, 68, 68, 0.1); padding: 0.5rem; border-radius: 4px;">{actionError}</div>{/if}
+    <form onsubmit={handleAddFloor} style="display: flex; flex-direction: column; gap: 1rem;">
+      <div>
+        <label for="floorNum" style="display: block; font-size: 0.85rem; margin-bottom: 0.3rem;">Floor Number</label>
+        <input type="number" id="floorNum" bind:value={newFloorNumber} required min="0" style="width: 100%; padding: 0.55rem; background: #0f172a; color: white; border: 1px solid #475569; border-radius: 6px; box-sizing: border-box;" />
+      </div>
+      <div>
+        <label for="floorName" style="display: block; font-size: 0.85rem; margin-bottom: 0.3rem;">Floor Name (Optional)</label>
+        <input type="text" id="floorName" bind:value={newFloorName} placeholder="e.g. 1st Floor" style="width: 100%; padding: 0.55rem; background: #0f172a; color: white; border: 1px solid #475569; border-radius: 6px; box-sizing: border-box;" />
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 0.8rem; margin-top: 1rem;">
+        <Button label="Cancel" type="button" variant="secondary" onclick={() => (isAddFloorOpen = false)} />
+        <Button label={isSubmitting ? 'Saving...' : 'Add Floor'} type="submit" variant="primary" disabled={isSubmitting} />
+      </div>
+    </form>
+  </div>
+</Dialog>
+
+<Dialog isOpen={isAddRoomOpen} onOpenChange={(open) => (isAddRoomOpen = open)} purpose="form" width="500px">
+  <div style="padding: 1.5rem; background: var(--color-background-card, #1e293b); color: var(--color-text-primary, inherit); border-radius: 8px;">
+    <h2 style="margin-top: 0; font-size: 1.2rem; margin-bottom: 0.5rem;">+ Add New Room &amp; Auto-Beds</h2>
+    <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); padding: 0.625rem 0.875rem; border-radius: 6px; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between;">
+      <div>
+        <span style="font-size: 0.75rem; color: #93c5fd; font-weight: 600; display: block; text-transform: uppercase;">Creating Room For Hostel</span>
+        <strong style="color: #f8fafc; font-size: 0.95rem;">🏢 {data.hostel?.name ?? 'Selected Hostel'}</strong>
+      </div>
+      {#if data.hostel?.code}
+        <span style="background: #1e3a8a; color: #93c5fd; font-weight: 700; font-size: 0.75rem; padding: 0.25rem 0.5rem; border-radius: 4px;">{data.hostel.code}</span>
+      {/if}
+    </div>
+    <p style="font-size: 0.85rem; color: #9ca3af; margin-bottom: 1rem;">Register a room. Individual beds (Bed A, Bed B, etc.) are generated automatically based on capacity.</p>
+    {#if actionError}<div style="color: #f87171; margin-bottom: 0.8rem; font-size: 0.85rem; background: rgba(239, 68, 68, 0.1); padding: 0.5rem; border-radius: 4px;">{actionError}</div>{/if}
+    <form onsubmit={handleAddRoom} style="display: flex; flex-direction: column; gap: 1rem;">
+      <div>
+        <label for="floorSelect" style="display: block; font-size: 0.85rem; margin-bottom: 0.3rem;">Select Floor</label>
+        <select id="floorSelect" bind:value={newRoomFloorId} required style="width: 100%; padding: 0.55rem; background: #0f172a; color: white; border: 1px solid #475569; border-radius: 6px; box-sizing: border-box;">
+          <option value={undefined}>-- Select Floor --</option>
+          {#each data.floors as f}
+            <option value={f.id}>{f.label || (f as any).name || (f as any).number || f.id}</option>
+          {/each}
+        </select>
+      </div>
+      <div>
+        <label for="roomNum" style="display: block; font-size: 0.85rem; margin-bottom: 0.3rem;">Room Number</label>
+        <input type="text" id="roomNum" bind:value={newRoomNumber} required placeholder="e.g. 101" style="width: 100%; padding: 0.55rem; background: #0f172a; color: white; border: 1px solid #475569; border-radius: 6px; box-sizing: border-box;" />
+      </div>
+      <div>
+        <label for="roomType" style="display: block; font-size: 0.85rem; margin-bottom: 0.3rem;">Room Type</label>
+        <select id="roomType" bind:value={newRoomType} style="width: 100%; padding: 0.55rem; background: #0f172a; color: white; border: 1px solid #475569; border-radius: 6px; box-sizing: border-box;">
+          <option value="NON_AC">Non-AC</option>
+          <option value="AC">AC</option>
+          <option value="STORE">Store / Storage Room</option>
+        </select>
+      </div>
+      <div>
+        <label for="roomCap" style="display: block; font-size: 0.85rem; margin-bottom: 0.3rem;">Bed Capacity (Generates Bed A, B, etc.)</label>
+        <input type="number" id="roomCap" bind:value={newRoomCapacity} required min="1" max="10" style="width: 100%; padding: 0.55rem; background: #0f172a; color: white; border: 1px solid #475569; border-radius: 6px; box-sizing: border-box;" />
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 0.8rem; margin-top: 1rem;">
+        <Button label="Cancel" type="button" variant="secondary" onclick={() => (isAddRoomOpen = false)} />
+        <Button label={isSubmitting ? 'Creating...' : 'Create Room'} type="submit" variant="primary" disabled={isSubmitting} />
+      </div>
+    </form>
+  </div>
 </Dialog>

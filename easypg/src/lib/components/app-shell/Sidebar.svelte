@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { enhance } from '$lib/api/forms';
   import { SideNav, SideNavSection, SideNavItem, Avatar, Text, Button } from '@astryx-svelte/core';
   import type { NavItem } from '$lib/constants/navigation';
   import { getNavIcon } from './icons';
@@ -11,17 +10,23 @@
     navItems = [],
     currentPath = '',
     user = null,
-    role = 'resident'
+    role = 'resident',
+    enhanceAction = (node: HTMLFormElement) => {}
   }: {
     navItems?: NavItem[];
     currentPath?: string;
     user?: { id?: string; name?: string; email?: string } | null;
     role?: string;
+    enhanceAction?: (node: HTMLFormElement) => { destroy?(): void } | void;
   } = $props();
   const roleLabels: Record<string, string> = {
     platform_admin: 'Platform Admin',
-    organization_admin: 'Owner / Org Admin',
-    manager: 'Manager',
+    organization_admin: 'Organization Admin',
+    org_admin: 'Partner / Org Admin',
+    partner: 'Partner / Org Admin',
+    head: 'Head Admin',
+    manager: 'Property Manager',
+    supervisor: 'Supervisor',
     resident: 'Resident'
   };
 </script>
@@ -53,7 +58,7 @@
           ></span
         >
       </a>
-      <form method="POST" data-operation="signOut" use:enhance>
+      <form method="POST" data-operation="signOut" use:enhanceAction>
         <Button
           label="Log out of workspace"
           variant="ghost"

@@ -33,6 +33,33 @@
   let statusPending = $state<Record<string, boolean>>({});
   let statusErrors = $state<Record<string, string>>({});
 
+  // Edit Organization state
+  let isEditDialogOpen = $state(false);
+  let editingOrg = $state<any>(null);
+  let editOrgName = $state('');
+  let editOrgStatus = $state<'active' | 'inactive'>('active');
+
+  function openEditOrg(org: any) {
+    editingOrg = org;
+    editOrgName = org.name;
+    editOrgStatus = org.status === 'active' ? 'active' : 'inactive';
+    isEditDialogOpen = true;
+  }
+
+  async function handleSaveOrg(e: Event) {
+    e.preventDefault();
+    if (!editingOrg) return;
+    editingOrg.name = editOrgName;
+    editingOrg.status = editOrgStatus;
+    isEditDialogOpen = false;
+    await invalidateAll();
+  }
+
+  async function toggleOrgStatus(org: any) {
+    org.status = org.status === 'active' ? 'inactive' : 'active';
+    await invalidateAll();
+  }
+
   function setStatusPending(id: string, pending: boolean) {
     statusPending = { ...statusPending, [id]: pending };
   }
@@ -189,8 +216,15 @@
           <div {...sx(styles.orgMeta)}>
             <span>Created {formatDate(org.createdAt)}</span><span>ID: {org.id}</span>
           </div>
-          <div {...sx(styles.cardFooter)}>
+          <div {...sx(styles.cardFooter)} style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
             <Button label="View Hostels" href="/hostels" variant="secondary" size="sm" />
+            <Button label="Edit" variant="ghost" size="sm" onclick={() => openEditOrg(org)} />
+            <Button
+              label={org.status === 'active' ? 'Deactivate' : 'Activate'}
+              variant={org.status === 'active' ? 'ghost' : 'primary'}
+              size="sm"
+              onclick={() => toggleOrgStatus(org)}
+            />
           </div>
         </Card>
       {/each}
@@ -265,6 +299,59 @@
           isDisabled={isSubmitting}
         >
           {#snippet icon()}{#if !isSubmitting}<CheckCircle2 size={15} />{/if}{/snippet}
+        </Button>
+      </div>
+    </form>
+  </div>
+</Dialog>
+
+<Dialog
+  isOpen={isEditDialogOpen}
+  onOpenChange={(open) => (isEditDialogOpen = open)}
+  width={460}
+  purpose="form"
+  aria-label="Edit Organization Details"
+>
+  <div {...sx(styles.dialog)}>
+    <div {...sx(styles.dialogHeader)}>
+      <h2 {...sx(styles.dialogTitle)}>Edit Organization Details</h2>
+      <p {...sx(styles.dialogDescription)}>
+        Update organization name and active operating status.
+      </p>
+    </div>
+    <form onsubmit={handleSaveOrg} {...sx(styles.dialogForm)}>
+      <TextInput
+        label="Organization Name"
+        htmlName="editName"
+        value={editOrgName}
+        onChange={(value) => (editOrgName = value)}
+        isRequired
+      />
+      <div style="margin-top: 1rem;">
+        <label for="editOrgStatusSelect" style="display: block; margin-bottom: 0.4rem; font-weight: 500; font-size: 0.9rem; color: var(--color-text-primary, inherit);">Operating Status</label>
+        <select
+          id="editOrgStatusSelect"
+          value={editOrgStatus}
+          onchange={(e) => (editOrgStatus = (e.target as HTMLSelectElement).value as any)}
+          style="width: 100%; padding: 0.6rem; background: var(--color-background-elevated, #0f172a); color: var(--color-text-primary, inherit); border: 1px solid var(--color-border, #475569); border-radius: 6px; font-size: 0.95rem;"
+        >
+          <option value="active">Active</option>
+          <option value="inactive">Inactive / Suspended</option>
+        </select>
+      </div>
+      <div {...sx(styles.dialogActions)} style="margin-top: 1.5rem;">
+        <Button
+          label="Cancel"
+          type="button"
+          variant="secondary"
+          onclick={() => (isEditDialogOpen = false)}
+        />
+        <Button
+          label="Save Changes"
+          type="submit"
+          variant="primary"
+        >
+          {#snippet icon()}<CheckCircle2 size={15} />{/snippet}
         </Button>
       </div>
     </form>
