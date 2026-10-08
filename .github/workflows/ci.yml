@@ -40,6 +40,11 @@ jobs:
           cd backend
           npm run build
 
+      - name: Run Backend Tests (if present)
+        run: |
+          cd backend
+          npm test --if-present
+
       - name: Install Frontend Dependencies
         working-directory: easypg
         run: pnpm install --frozen-lockfile
