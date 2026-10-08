@@ -1,0 +1,6 @@
+ts,backend_pid,backend_cpu_pct,backend_mem_rss_kb,mysql_pid,mysql_cpu_pct,mysql_mem_rss_kb,overall_cpu_pct,overall_mem_used_kb,overall_mem_total_kb,mysql_threads_connected,mysql_processlist_count,select1_ms,get_root_ms,perf_schema
+2026-10-07T05:56:15Z,6431,0.1,91828,2537,0.3,555124,6.2,1831824,7500608,11,11,12.4,12.4,unavailable:app_user_denied
+2026-10-07T05:56:17Z,6431,0.1,91828,2537,0.2,555124,6.1,1832112,7500608,11,11,12.6,1.1,unavailable:app_user_denied
+2026-10-07T05:56:19Z,6431,0.1,91832,2537,0.4,555124,5.9,1850716,7500608,11,11,11.5,1.1,unavailable:app_user_denied
+2026-10-07T05:56:21Z,6431,0.1,91832,2537,0.4,555124,6.2,1839704,7500608,11,11,11.9,1.0,unavailable:app_user_denied
+2026-10-07T05:56:23Z,6431,0.1,91832,2537,0.2,555124,7.1,1835488,7500608,11,11,12.7,1.1,unavailable:app_user_denied
