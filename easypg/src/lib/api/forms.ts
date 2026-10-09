@@ -4,6 +4,29 @@ import { api } from "./client";
 import { ApiError } from "./errors";
 import { operations, type Operation, type CommandInput } from "./operations";
 import { rupeesToWire } from "./transport";
+
+function generateIdempotencyKey(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+
+    const hex = Array.from(bytes, (byte) =>
+      byte.toString(16).padStart(2, "0"),
+    ).join("");
+
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export interface Feedback {
   success?: boolean;
   message?: string;
@@ -102,7 +125,7 @@ export function enhance(
       }
       const signature = JSON.stringify({ operation, input });
       if (!retry || retry.signature !== signature)
-        retry = { signature, key: crypto.randomUUID() };
+        retry = { signature, key: generateIdempotencyKey() };
       const outcome = await api.command(operation, input, retry.key);
       retry = undefined;
       const location =

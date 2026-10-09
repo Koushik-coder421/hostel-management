@@ -24,7 +24,7 @@ function getAuthHeaders(): Record<string, string> {
   return headers;
 }
 
-const BASE_URL = "http://localhost:5000/api";
+const BASE_URL = "/api";
 
 export async function fetchLiveStreams(hostelId?: number): Promise<CameraStream[]> {
   const url = hostelId ? `${BASE_URL}/streams?hostel_id=${hostelId}` : `${BASE_URL}/streams`;
