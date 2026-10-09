@@ -409,7 +409,7 @@ export function createDemoAdapter() {
       const snapshot = state ? copy(state) : null;
       const priorReceipts = new Map(receipts);
       try {
-        let result: CommandResult = {
+        const result: CommandResult = {
           success: true,
           message: "Demo updated. No production records were changed.",
         };

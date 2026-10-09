@@ -19,7 +19,7 @@ export const seedDatabase = async () => {
             for (const stmt of statements) {
                 try {
                     await pool.query(stmt);
-                } catch (err: any) {
+                } catch {
                     // Ignore table exists or statement errors during migration
                 }
             }
@@ -46,7 +46,7 @@ export const seedDatabase = async () => {
         for (const alterStmt of safeAddColumns) {
             try {
                 await pool.query(alterStmt);
-            } catch (err: any) {
+            } catch {
                 // Column already exists or duplicate column name error (code 1060)
             }
         }
@@ -69,7 +69,6 @@ export const seedDatabase = async () => {
 
         // Fetch staff IDs
         const [staffs] = await pool.query<any[]>("SELECT staff_id, email, role FROM staff");
-        const adminId = staffs.find(s => s.role === "ADMIN")?.staff_id || 1;
         const superId = staffs.find(s => s.role === "SUPERVISOR")?.staff_id || 2;
         const maintId = staffs.find(s => s.role === "MAINTENANCE_STAFF")?.staff_id || 3;
 

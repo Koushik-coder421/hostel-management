@@ -434,7 +434,7 @@ export const getViewRooms = async (req: Request, res: Response, next: NextFuncti
         const scope = user ? await buildUserScope(user) : { allowedHostelIds: [], role: "MANAGER", activeHostelId: "" };
         const activeHostel = await getActiveHostel(scope);
 
-        let hostelId = scope.activeHostelId || 1;
+        const hostelId = scope.activeHostelId || 1;
         const [floors] = await pool.query<any[]>(
             "SELECT floor_id, name, floor_number FROM floor WHERE hostel_id = ? ORDER BY floor_number ASC",
             [hostelId]
@@ -537,7 +537,7 @@ export const getViewCheckIns = async (req: Request, res: Response, next: NextFun
         const user = (req as any).user;
         const scope = user ? await buildUserScope(user) : { allowedHostelIds: [], role: "MANAGER", activeHostelId: "" };
         const activeHostel = await getActiveHostel(scope);
-        let hostelId = scope.activeHostelId || 1;
+        const hostelId = scope.activeHostelId || 1;
 
         const [floors] = await pool.query<any[]>(
             "SELECT floor_id, name as label, floor_number as sortOrder FROM floor WHERE hostel_id = ?",
@@ -927,8 +927,7 @@ export const handleSwitchHostel = async (req: Request, res: Response, next: Next
 
 export const handleCheckIn = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { fullName, phone, email, password, gender, bedId, checkInDate, agreedRentPaise } = req.body;
-        const rentAmount = agreedRentPaise ? (Number(agreedRentPaise) / 100) : 8000;
+        const { fullName, phone, email, password, gender, bedId, checkInDate } = req.body;
 
         const initialPassword = password || "resident123";
         const passwordHash = await bcrypt.hash(initialPassword, 10);
@@ -1250,7 +1249,7 @@ export const getViewMaintenance = async (req: Request, res: Response, next: Next
         const scope = user ? await buildUserScope(user) : { allowedHostelIds: [], role: "MANAGER", activeHostelId: "" };
         const activeHostel = await getActiveHostel(scope);
 
-        let query = `
+        const query = `
             SELECT mc.*, t.name as tenant_name, t.phone as tenant_phone
             FROM maintenance_complaint mc
             JOIN tenant t ON mc.tenant_id = t.tenant_id

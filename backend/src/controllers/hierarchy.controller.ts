@@ -27,7 +27,6 @@ export const createHead = async (req: Request, res: Response, next: NextFunction
         await connection.beginTransaction();
 
         const passwordHash = await bcrypt.hash(password, 10);
-        const startDate = new Date().toISOString().slice(0, 10);
 
         // 1. Insert into person
         const [personResult] = await connection.query<any>(
@@ -1321,7 +1320,7 @@ export const elevateHierarchyStaffRole = async (req: Request, res: Response, nex
     const connection = await pool.getConnection();
     try {
         const staffId = Number(req.params.id);
-        const { targetRole, partner_id, head_id, hostel_id, assignment_role } = req.body;
+        const { targetRole, partner_id, head_id } = req.body;
         const editorId = (req as any).user?.staff_id || "SYSTEM";
 
         const [existing] = await connection.query<any[]>(

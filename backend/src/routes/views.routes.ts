@@ -17,12 +17,7 @@ import {
     getViewMaintenance,
     getViewExpenses,
     handleLogVisitor,
-    handleCheckoutVisitor,
-    handleSwitchHostel,
-    handleCheckIn,
-    handleCheckOut,
-    handleSetBedStatus,
-    handleRecordPayment
+    handleCheckoutVisitor
 } from "../controllers/views.controller";
 
 const router = Router();

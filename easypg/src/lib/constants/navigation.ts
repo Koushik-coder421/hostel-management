@@ -45,8 +45,6 @@ const HEAD_NAV: NavItem[] = [
   { label: 'Settings', href: '/settings', icon: 'settings', mobileNav: false }
 ];
 
-const PARTNER_NAV: NavItem[] = ORG_ADMIN_NAV;
-
 const MANAGER_NAV: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: 'layout-dashboard', mobileNav: true },
   { label: 'Hostels', href: '/hostels', icon: 'home', mobileNav: true },
