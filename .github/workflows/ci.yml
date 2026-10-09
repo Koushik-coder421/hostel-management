@@ -45,6 +45,11 @@ jobs:
           cd backend
           npm test --if-present
 
+      - name: Lint Backend
+        run: |
+          cd backend
+          npm run lint
+
       - name: Install Frontend Dependencies
         working-directory: easypg
         run: pnpm install --frozen-lockfile
@@ -53,6 +58,11 @@ jobs:
         run: |
           cd easypg
           npx svelte-check --tsconfig ./tsconfig.json
+
+      - name: Lint Frontend
+        run: |
+          cd easypg
+          pnpm lint
 
       - name: Build Frontend Application
         run: |

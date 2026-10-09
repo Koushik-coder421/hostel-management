@@ -8,7 +8,7 @@ import {
   type CommandInput,
   type CommandResult,
 } from "./operations";
-import type { AppData, PageDataMap, Role } from "./contracts";
+import type { AppData, PageDataMap } from "./contracts";
 import { validateSession, validatePage } from "./validate";
 const http = createHttp(config);
 // The demo implementation is never selected as recovery for a live API error.

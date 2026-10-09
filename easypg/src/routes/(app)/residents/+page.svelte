@@ -42,12 +42,14 @@
 
   function updateFilters(newStatus?: string, newSearch?: string) {
     const url = new URL($page.url);
-    if (newStatus !== undefined)
-      newStatus === 'all'
-        ? url.searchParams.delete('status')
-        : url.searchParams.set('status', newStatus);
-    if (newSearch !== undefined)
-      newSearch ? url.searchParams.set('q', newSearch) : url.searchParams.delete('q');
+    if (newStatus !== undefined) {
+      if (newStatus === 'all') url.searchParams.delete('status');
+      else url.searchParams.set('status', newStatus);
+    }
+    if (newSearch !== undefined) {
+      if (newSearch) url.searchParams.set('q', newSearch);
+      else url.searchParams.delete('q');
+    }
     goto(url.toString(), { keepFocus: true, noScroll: true });
   }
 

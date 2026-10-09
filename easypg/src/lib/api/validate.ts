@@ -13,7 +13,6 @@ const checks = Object.fromEntries(
     ajv.compile({ ...schema, definitions: views.definitions }),
   ]),
 );
-const sessionCheck = ajv.compile(schemas.AppData);
 export function validatePage(route: keyof PageDataMap, value: unknown): void {
   const check = checks[route];
   if (check && !check(value))

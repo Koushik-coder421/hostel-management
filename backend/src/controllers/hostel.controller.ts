@@ -5,7 +5,7 @@ import { AppError } from "../middleware/errorHandler";
 async function ensureHostelColumns() {
     try {
         await pool.query("ALTER TABLE hostel ADD COLUMN deactivation_reason VARCHAR(255) NULL");
-    } catch (err) {
+    } catch {
         // column already exists
     }
 }

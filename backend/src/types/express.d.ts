@@ -1,3 +1,4 @@
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- import keeps this file a module so `declare global` augments Express.Request
 import { Request } from "express";
 
 export interface AuthUser {
