@@ -1,0 +1,21 @@
+{
+  "component": "jwt_sign",
+  "workers": 25,
+  "bcrypt_cost": 8,
+  "hash_prefix": null,
+  "method": "isolated closed-loop, 5s warmup discarded + 30s measurement, no think time",
+  "total_requests": 634002,
+  "successful_requests": 634002,
+  "failed_requests": 0,
+  "error_rate": 0,
+  "throughput_rps": 21133.4,
+  "latency_ms": {
+    "avg": 1.1826648660698666,
+    "min": 0.0481179999987944,
+    "p50": 1.1393769999999677,
+    "p90": 1.2221057999977347,
+    "p95": 1.2663919000013264,
+    "max": 5.324928999998519
+  },
+  "note": "Isolated component timing. Do NOT sum with other components as end-to-end latency."
+}

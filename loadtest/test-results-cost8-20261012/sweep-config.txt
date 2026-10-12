@@ -1,0 +1,31 @@
+sweep start=2026-10-12T05:42:56Z
+endpoint=http://localhost:5000/api/session account=k6-cost8@hostel.local
+bcrypt_cost=8 (stored-hash prefix $2b$08$, rounds=8)
+app_code_bcrypt_default=10 (BCRYPT_ROUNDS env=<unset>); compare cost comes from stored hash, so measured path is cost 8
+k6_stages=ramp15s/hold60s/down10s sleep=0.5s timeout=15s
+components=closed-loop fixed-concurrency, 5s warmup discarded + 30s measure, no think time
+git_rev=6337017 backend_pid=5667
+cpu=Intel(R) Core(TM) i5-6500 CPU @ 3.20GHz cores=4
+               total        used        free      shared  buff/cache   available
+Mem:            7324        1496        5003          25        1095        5828
+mysql  Ver 8.4.11-0ubuntu0.26.04.1 for Linux on x86_64 ((Ubuntu))
+v24.20.0
+k6 v0.55.0 (commit/90bb9415d0, go1.23.3, linux/amd64)
+=== FULL sign-in VU=10 2026-10-12T05:42:56Z ===
+=== COMPONENT db_lookup workers=10 2026-10-12T05:44:30Z ===
+=== COMPONENT bcrypt_compare workers=10 2026-10-12T05:45:13Z ===
+=== COMPONENT jwt_sign workers=10 2026-10-12T05:45:57Z ===
+=== FULL sign-in VU=25 2026-10-12T05:46:40Z ===
+=== COMPONENT db_lookup workers=25 2026-10-12T05:48:14Z ===
+=== COMPONENT bcrypt_compare workers=25 2026-10-12T05:48:57Z ===
+=== COMPONENT jwt_sign workers=25 2026-10-12T05:49:41Z ===
+=== FULL sign-in VU=50 2026-10-12T05:50:24Z ===
+=== COMPONENT db_lookup workers=50 2026-10-12T05:51:58Z ===
+=== COMPONENT bcrypt_compare workers=50 2026-10-12T05:52:41Z ===
+=== COMPONENT jwt_sign workers=50 2026-10-12T05:53:25Z ===
+=== FULL sign-in VU=100 2026-10-12T05:54:08Z ===
+=== COMPONENT db_lookup workers=100 2026-10-12T05:55:42Z ===
+=== COMPONENT bcrypt_compare workers=100 2026-10-12T05:56:25Z ===
+=== COMPONENT jwt_sign workers=100 2026-10-12T05:57:09Z ===
+=== invalid-credentials probe (separate, not mixed) 2026-10-12T05:57:53Z ===
+sweep end=2026-10-12T05:57:53Z

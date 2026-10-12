@@ -1,0 +1,21 @@
+{
+  "component": "bcrypt_compare",
+  "workers": 25,
+  "bcrypt_cost": 8,
+  "hash_prefix": "$2b$08$",
+  "method": "isolated closed-loop, 5s warmup discarded + 30s measurement, no think time",
+  "total_requests": 8172,
+  "successful_requests": 8172,
+  "failed_requests": 0,
+  "error_rate": 0,
+  "throughput_rps": 271.61232425964704,
+  "latency_ms": {
+    "avg": 91.9154432677435,
+    "min": 15.156869999999799,
+    "p50": 91.18838399999913,
+    "p90": 96.00309150000248,
+    "p95": 97.98905410000006,
+    "max": 136.71700599999895
+  },
+  "note": "Isolated component timing. Do NOT sum with other components as end-to-end latency."
+}

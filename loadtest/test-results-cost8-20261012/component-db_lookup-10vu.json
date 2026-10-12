@@ -1,0 +1,21 @@
+{
+  "component": "db_lookup",
+  "workers": 10,
+  "bcrypt_cost": 8,
+  "hash_prefix": null,
+  "method": "isolated closed-loop, 5s warmup discarded + 30s measurement, no think time",
+  "total_requests": 610992,
+  "successful_requests": 610992,
+  "failed_requests": 0,
+  "error_rate": 0,
+  "throughput_rps": 20366.4,
+  "latency_ms": {
+    "avg": 0.49071818493367825,
+    "min": 0.13200099999812664,
+    "p50": 0.39827599999989616,
+    "p90": 0.7748590000010154,
+    "p95": 0.8067374500001279,
+    "max": 4.980986000002304
+  },
+  "note": "Isolated component timing. Do NOT sum with other components as end-to-end latency."
+}
